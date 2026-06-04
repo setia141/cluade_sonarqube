@@ -1,136 +1,169 @@
 # SonarQube Fixer Agent
 
-Autonomous agent that fixes SonarQube issues (Blocker, Critical, Major) across Java, Python, .NET, and Node.js projects. Validates every fix using embedded mock servers before opening a pull request. Runs in GitHub Actions CI or interactively via Claude Code.
+Autonomous agent that fixes SonarQube issues (Blocker, Critical, Major) across Java, Python, .NET, and Node.js projects. Runs on your local machine via Claude Code. Validates every fix with real tests before opening a pull request — no Docker required.
 
 ## Supported Languages
 
-| Language | Build Tool | Test Framework | Mock Library |
-|---|---|---|---|
-| Java | Maven / Gradle | JUnit 5 | WireMock |
-| .NET | dotnet CLI | xUnit / NUnit / MSTest | WireMock.Net |
-| Python | pip / poetry | pytest | pytest-httpserver |
-| Node.js | npm / yarn | Jest / Mocha | nock |
+| Language | Build Tool | Test Framework | Coverage Tool | Mock Library (integration) |
+|---|---|---|---|---|
+| Java | Maven / Gradle | JUnit 5 | JaCoCo | WireMock |
+| .NET | dotnet CLI | xUnit / NUnit / MSTest | Coverlet | WireMock.Net |
+| Python | pip / poetry | pytest | pytest-cov | pytest-httpserver |
+| Node.js | npm / yarn | Jest / Mocha | Jest --coverage | nock |
 
 ## Prerequisites
 
-| Tool | Required for |
+| Tool | Purpose |
 |---|---|
 | Python 3.8+ | All scripts |
-| `pip install anthropic requests` | Fix generation and issue fetching |
-| `gh` CLI | PR creation (`create_pr.py`) |
-| Java 17+ / dotnet 8 / Node 20 | Language-specific validation layers |
+| `pip install requests` | SonarQube API calls |
+| `gh` CLI (authenticated) | PR creation |
+| Java 17+ / dotnet 8 / Node 20 | Only for the language you are fixing |
 
-### Secrets (GitHub Actions)
+## How to Use
 
-| Secret | Description |
-|---|---|
-| `SONARQUBE_TOKEN` | SonarQube API token |
-| `SONARQUBE_HOST_URL` | e.g. `https://sonarcloud.io` |
-| `SONARQUBE_PROJECT_KEY` | Project key from SonarQube dashboard |
-| `ANTHROPIC_API_KEY` | Claude API key for fix generation |
-| `GITHUB_TOKEN` | Auto-provided — needs `contents:write` and `pull-requests:write` |
+This is a Claude Code agent. Open your repo in Claude Code and invoke it — Claude drives the full pipeline below using its Read/Edit/Write/Bash tools.
 
-## Quick Start (Interactive)
+## Pipeline
+
+### Step 1 — Detect language
 
 ```bash
-# 1. Detect language
 python3 scripts/detect_language.py --repo . --output lang.json
+```
 
-# 2. Fetch issues
+Detects language, framework, build tool, HTTP client, test framework, and whether coverage tools (JaCoCo, pytest-cov, Coverlet, Jest) are already configured.
+
+### Step 2 — Fetch issues
+
+```bash
 python3 scripts/fetch_issues.py \
   --host $SONARQUBE_HOST_URL \
   --token $SONARQUBE_TOKEN \
   --project $SONARQUBE_PROJECT_KEY \
+  --severities BLOCKER,CRITICAL,MAJOR \
   --output issues.json
+```
 
-# 3. Analyse
+Token is optional for internal SonarQube instances with network authentication.
+
+### Step 3 — Analyse issues
+
+```bash
 python3 scripts/analyze_issue.py --issues issues.json --output analysis.json
+```
 
-# 4. Capture baseline (before fix)
+Categorises each issue as AUTO, GUIDED, MANUAL, or SKIP. Estimates effort. Provides fix strategy per rule.
+
+### Step 4 — Pre-flight coverage check
+
+```bash
 python3 scripts/validation/run_validation.py \
   --lang-config lang.json \
-  --changed-files "[]" \
+  --changed-files "[list from analysis.json]" \
+  --repo . \
+  --phase check-tests \
+  --output test-status.json
+```
+
+Runs existing tests with coverage enabled (JaCoCo / pytest-cov / Coverlet / Jest). Reports which lines of the files-to-be-changed are NOT covered. If `needs_tests: true` for any file, **Claude creates or enhances unit tests targeting those specific uncovered lines before continuing**.
+
+### Step 5 — Baseline (before fix)
+
+```bash
+# Unit tests only (always)
+python3 scripts/validation/run_validation.py \
+  --lang-config lang.json \
+  --changed-files "[files to fix]" \
   --repo . \
   --phase baseline \
   --output baseline.json
 
-# 5. Apply fixes
-# Claude reads analysis.json, uses Read/Edit/Write to fix each file,
-# and writes fixes.json — no separate script needed.
-# In Claude Code: just ask Claude to "apply the fixes from analysis.json"
-
-# 6. Validate after fix
+# + Integration tests with mock servers (optional — only if code makes HTTP calls)
 python3 scripts/validation/run_validation.py \
   --lang-config lang.json \
-  --changed-files "$(jq -c '[.[].file]' fixes.json)" \
+  --changed-files "[files to fix]" \
+  --repo . \
+  --phase baseline \
+  --integration \
+  --output baseline-integration.json
+```
+
+Unit tests run for changed files **and** any classes that call them (impact analysis). Integration tests generate WireMock/nock/pytest-httpserver scaffolds — **Claude fills in the actual function calls** in the generated test before running.
+
+### Step 6 — Apply fix
+
+Claude reads `analysis.json`, reads each source file, and applies the minimal change using the Edit tool. No script — Claude is the fix engine.
+
+### Step 7 — Validate (after fix)
+
+```bash
+python3 scripts/validation/run_validation.py \
+  --lang-config lang.json \
+  --changed-files "[fixed files]" \
   --repo . \
   --phase post-fix \
   --baseline baseline.json \
   --output validation.json
+```
 
-# 7. Create PR
+Expected: happy-path tests still pass, fix-scenario tests now pass (they failed at baseline), caller tests still pass.
+
+### Step 8 — Create PR
+
+```bash
 python3 scripts/create_pr.py \
   --fixes fixes.json \
   --validation validation.json \
   --base main
 ```
 
-## GitHub Actions
+HIGH confidence → ready PR. MEDIUM → draft PR. LOW → fix reverted.
 
-See `references/github-actions-setup.md` for complete workflow YAML for all 4 languages.
+## Confidence Scoring
 
-## Validation Pipeline
-
-Four layers run for every fix:
-
-| Layer | What it checks |
-|---|---|
-| 1. Compile | Project still builds after fix |
-| 2. Scoped unit tests | Tests for changed files still pass |
-| 3. Integration (mock server) | Downstream HTTP calls unchanged |
-| 4. Stub interaction comparison | Call counts match baseline |
-
-**Confidence scores**: HIGH → auto PR, MEDIUM → draft PR, LOW → revert, SKIP → compile failed.
-
-Mock servers run in-process (no Docker):
-- Java/.NET: WireMock / WireMock.Net — real TCP socket on dynamic port
-- Python: pytest-httpserver — real HTTP server via `with` block
-- Node.js: nock — intercepts at `http.request` level, no network needed
-
-See `references/validation-approach.md` for full design.
+| Score | Condition | Action |
+|---|---|---|
+| HIGH | All unit tests pass, fix-scenario test now passes, callers pass | Ready PR |
+| MEDIUM | Most pass, minor flag | Draft PR |
+| LOW | Unit test regression detected | Revert fix |
+| SKIP | Compile failed | Do not touch file |
 
 ## Scripts
 
 | Script | Purpose |
 |---|---|
-| `scripts/detect_language.py` | Detect language, framework, build tool, HTTP client |
+| `scripts/detect_language.py` | Language, framework, coverage tool detection |
 | `scripts/fetch_issues.py` | Fetch issues from SonarQube API |
-| `scripts/analyze_issue.py` | Categorise issues, estimate effort, suggest strategies |
-| `scripts/validation/run_validation.py` | Orchestrate all 4 validation layers |
-| `scripts/validation/java_wiremock.py` | WireMock integration test generator |
-| `scripts/validation/dotnet_wiremock.py` | WireMock.Net integration test generator |
-| `scripts/validation/python_validator.py` | pytest-httpserver test generator |
-| `scripts/validation/node_validator.py` | nock test generator |
-| `scripts/create_pr.py` | Create GitHub PR with validation report |
+| `scripts/analyze_issue.py` | Categorise issues, estimate effort |
+| `scripts/validation/run_validation.py` | Orchestrator — phases: check-tests, baseline, post-fix |
+| `scripts/validation/coverage_check.py` | Line-level coverage via JaCoCo / pytest-cov / Coverlet / Jest |
+| `scripts/validation/java_wiremock.py` | WireMock integration test scaffold (Java) |
+| `scripts/validation/dotnet_wiremock.py` | WireMock.Net integration test scaffold (.NET) |
+| `scripts/validation/python_validator.py` | pytest-httpserver integration test scaffold (Python) |
+| `scripts/validation/node_validator.py` | nock integration test scaffold (Node.js) |
+| `scripts/create_pr.py` | Branch, commit, PR via `gh` CLI |
 
 ## References
 
 | File | Content |
 |---|---|
-| `references/github-actions-setup.md` | Complete CI workflow YAML for all 4 languages |
 | `references/sonarqube-api.md` | SonarQube REST API reference |
-| `references/java-issue-patterns.md` | Java SonarQube rule patterns and fix templates |
-| `references/python-issue-patterns.md` | Python SonarQube rule patterns |
-| `references/dotnet-issue-patterns.md` | .NET/C# SonarQube rule patterns |
-| `references/node-issue-patterns.md` | JavaScript/TypeScript SonarQube rule patterns |
-| `references/validation-approach.md` | Validation architecture and mock server design |
+| `references/java-issue-patterns.md` | Java rule patterns and fix templates |
+| `references/python-issue-patterns.md` | Python rule patterns |
+| `references/dotnet-issue-patterns.md` | .NET/C# rule patterns |
+| `references/node-issue-patterns.md` | JavaScript/TypeScript rule patterns |
+| `references/validation-approach.md` | Validation architecture, mock server design |
+| `references/github-actions-setup.md` | Optional CI workflow YAML for all 4 languages |
 
 ## Troubleshooting
 
-**`Bearer None` in logs** — token was not set. Pass `--token` or set `SONARQUBE_TOKEN`. Token-less mode works for internal SonarQube with network auth.
+**No issues found** — check that the SonarQube analysis has completed and the project key is correct.
 
-**`ModuleNotFoundError: No module named 'scripts'`** — run scripts from the repo root, not from inside `scripts/`. The validation orchestrator adds the repo root to `sys.path` automatically.
+**`Bearer None` in logs** — token not set. Pass `--token $SONARQUBE_TOKEN` or set the env var. For internal SonarQube with network auth, omit the token entirely.
 
-**Fix not applied** — `old_code` from Claude did not match the file exactly. Check for CRLF vs LF line endings or tabs vs spaces differences.
+**`ModuleNotFoundError: No module named 'scripts'`** — run all scripts from the repo root, not from inside `scripts/`.
 
-**PR creation fails** — `gh` CLI must be installed and authenticated (`gh auth status`).
+**Coverage report not generated** — the coverage tool (JaCoCo / pytest-cov / Coverlet) was added to your project automatically. Run `mvn test` / `pytest` / `dotnet test` once manually to confirm tests pass before running the agent.
+
+**PR creation fails** — `gh` CLI must be installed and authenticated: `gh auth status`.
