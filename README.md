@@ -149,10 +149,6 @@ HIGH confidence → ready PR. MEDIUM → draft PR. LOW → fix reverted.
 | File | Content |
 |---|---|
 | `references/sonarqube-api.md` | SonarQube REST API reference |
-| `references/java-issue-patterns.md` | Java rule patterns and fix templates |
-| `references/python-issue-patterns.md` | Python rule patterns |
-| `references/dotnet-issue-patterns.md` | .NET/C# rule patterns |
-| `references/node-issue-patterns.md` | JavaScript/TypeScript rule patterns |
 | `references/validation-approach.md` | Validation architecture, mock server design |
 | `references/github-actions-setup.md` | Optional CI workflow YAML for all 4 languages |
 

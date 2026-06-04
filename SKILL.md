@@ -682,9 +682,5 @@ GIT_BRANCH                 # current branch name
 ## References
 
 - `references/sonarqube-api.md` — SonarQube API endpoints
-- `references/java-issue-patterns.md` — Java fix patterns
-- `references/python-issue-patterns.md` — Python fix patterns
-- `references/dotnet-issue-patterns.md` — .NET fix patterns
-- `references/node-issue-patterns.md` — Node.js fix patterns
-- `references/validation-approach.md` — WireMock patterns deep dive
+- `references/validation-approach.md` — WireMock/mock server patterns deep dive
 - `references/github-actions-setup.md` — CI workflow examples
