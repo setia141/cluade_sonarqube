@@ -148,8 +148,8 @@ def enrich_issues_with_details(
     
     for issue in issues:
         rule_key = issue.get("rule", "")
-        component_key = issue["mainLocation"]["component"]
-        line_num = issue["mainLocation"]["startLine"]
+        component_key = issue.get("component", "")
+        line_num = issue.get("line", 1)
         
         # Get context: 5 lines before and after
         from_line = max(1, line_num - 5)
