@@ -47,13 +47,13 @@ python3 scripts/fetch_issues.py \
 
 Token is optional for internal SonarQube instances with network authentication.
 
-### Step 3 — Analyse issues
+### Step 3 — Enrich issues with rule details
 
 ```bash
-python3 scripts/analyze_issue.py --issues issues.json --output analysis.json
+python3 scripts/analyze_issue.py --issues issues.json --output enriched.json
 ```
 
-Categorises each issue as AUTO, GUIDED, MANUAL, or SKIP. Estimates effort. Provides fix strategy per rule.
+Calls `/api/rules/show` for every rule referenced in the issues and attaches the rule name, description, severity, and type to each issue. Claude reads this enriched output and decides what to fix and how.
 
 ### Step 4 — Pre-flight coverage check
 
@@ -135,7 +135,7 @@ HIGH confidence → ready PR. MEDIUM → draft PR. LOW → fix reverted.
 |---|---|
 | `scripts/detect_language.py` | Language, framework, coverage tool detection |
 | `scripts/fetch_issues.py` | Fetch issues from SonarQube API |
-| `scripts/analyze_issue.py` | Categorise issues, estimate effort |
+| `scripts/analyze_issue.py` | Enrich issues with rule details from SonarQube Rules API |
 | `scripts/validation/run_validation.py` | Orchestrator — phases: check-tests, baseline, post-fix |
 | `scripts/validation/coverage_check.py` | Line-level coverage via JaCoCo / pytest-cov / Coverlet / Jest |
 | `scripts/validation/java_wiremock.py` | WireMock integration test scaffold (Java) |

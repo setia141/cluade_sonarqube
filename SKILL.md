@@ -45,8 +45,9 @@ PHASE 2 — FETCH ISSUES
     --token $SONARQUBE_TOKEN --project $SONARQUBE_PROJECT_KEY \
     --severities BLOCKER,CRITICAL,MAJOR --output issues.json
 
-  python3 scripts/analyze_issue.py --issues issues.json --output analysis.json
-  # Produces: category (AUTO/GUIDED/MANUAL/SKIP), fixStrategy, effort per issue
+  python3 scripts/analyze_issue.py --issues issues.json --output enriched.json
+  # Calls /api/rules/show for every rule and attaches name, htmlDesc, severity, type
+  # to each issue. Claude reads enriched.json and decides what to fix and how.
 
 PHASE 3 — ENSURE UNIT TESTS EXIST  ← NEW: always do this before baseline
 
@@ -664,7 +665,7 @@ GIT_BRANCH                 # current branch name
 |---|---|
 | `scripts/detect_language.py` | Language, framework, HTTP client detection |
 | `scripts/fetch_issues.py` | Query SonarQube API for open issues |
-| `scripts/analyze_issue.py` | Categorize issues by language and fix complexity |
+| `scripts/analyze_issue.py` | Enrich issues with rule details from SonarQube Rules API |
 | `scripts/validation/run_validation.py` | Validation orchestrator — phases: check-tests, baseline, post-fix |
 | `scripts/validation/coverage_check.py` | Line-level coverage via JaCoCo / pytest-cov / Coverlet / Jest |
 | `scripts/validation/java_wiremock.py` | Java WireMock integration test scaffold generator |
