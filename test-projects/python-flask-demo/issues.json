@@ -1,0 +1,32 @@
+[
+  {
+    "key": "demo:PY001",
+    "rule": "python:S5754",
+    "severity": "MAJOR",
+    "component": "python-flask-demo:app/payment_service.py",
+    "line": 15,
+    "message": "Specify an exception class to catch.",
+    "type": "BUG",
+    "status": "OPEN"
+  },
+  {
+    "key": "demo:PY002",
+    "rule": "python:S1481",
+    "severity": "MINOR",
+    "component": "python-flask-demo:app/payment_service.py",
+    "line": 22,
+    "message": "Remove the unused 'debug_label' variable.",
+    "type": "CODE_SMELL",
+    "status": "OPEN"
+  },
+  {
+    "key": "demo:PY003",
+    "rule": "python:S2077",
+    "severity": "CRITICAL",
+    "component": "python-flask-demo:app/payment_service.py",
+    "line": 33,
+    "message": "Make sure that formatting this SQL query is safe here.",
+    "type": "VULNERABILITY",
+    "status": "OPEN"
+  }
+]

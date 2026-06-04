@@ -1,0 +1,32 @@
+[
+  {
+    "key": "demo:JS001",
+    "rule": "javascript:S2814",
+    "severity": "MAJOR",
+    "component": "node-express-demo:src/paymentService.js",
+    "line": 8,
+    "message": "'total' is already defined.",
+    "type": "BUG",
+    "status": "OPEN"
+  },
+  {
+    "key": "demo:JS002",
+    "rule": "javascript:S1481",
+    "severity": "MINOR",
+    "component": "node-express-demo:src/paymentService.js",
+    "line": 15,
+    "message": "Remove the declaration of the unused 'requestId' variable.",
+    "type": "CODE_SMELL",
+    "status": "OPEN"
+  },
+  {
+    "key": "demo:JS003",
+    "rule": "javascript:S3827",
+    "severity": "BLOCKER",
+    "component": "node-express-demo:src/paymentService.js",
+    "line": 23,
+    "message": "'logger' is not defined.",
+    "type": "BUG",
+    "status": "OPEN"
+  }
+]

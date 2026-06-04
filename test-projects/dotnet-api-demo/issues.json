@@ -1,0 +1,32 @@
+[
+  {
+    "key": "demo:CS001",
+    "rule": "csharpsquid:S2259",
+    "severity": "CRITICAL",
+    "component": "dotnet-api-demo:DemoApi/Services/OrderService.cs",
+    "line": 34,
+    "message": "Dereference of a possibly null reference 'result'.",
+    "type": "BUG",
+    "status": "OPEN"
+  },
+  {
+    "key": "demo:CS002",
+    "rule": "csharpsquid:S3966",
+    "severity": "MAJOR",
+    "component": "dotnet-api-demo:DemoApi/Services/OrderService.cs",
+    "line": 50,
+    "message": "Refactor this code to not dispose 'client' more than once.",
+    "type": "BUG",
+    "status": "OPEN"
+  },
+  {
+    "key": "demo:CS003",
+    "rule": "csharpsquid:S1481",
+    "severity": "MINOR",
+    "component": "dotnet-api-demo:DemoApi/Services/OrderService.cs",
+    "line": 59,
+    "message": "Remove the unused local variable 'auditMessage'.",
+    "type": "CODE_SMELL",
+    "status": "OPEN"
+  }
+]

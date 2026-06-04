@@ -1,0 +1,32 @@
+[
+  {
+    "key": "demo:AX001",
+    "rule": "java:S2259",
+    "severity": "CRITICAL",
+    "component": "java-spring-demo:src/main/java/com/demo/OrderService.java",
+    "line": 27,
+    "message": "A 'NullPointerException' could be thrown; 'response' is nullable here.",
+    "type": "BUG",
+    "status": "OPEN"
+  },
+  {
+    "key": "demo:AX002",
+    "rule": "java:S1481",
+    "severity": "MINOR",
+    "component": "java-spring-demo:src/main/java/com/demo/OrderService.java",
+    "line": 34,
+    "message": "Remove this unused 'unusedDebugInfo' local variable.",
+    "type": "CODE_SMELL",
+    "status": "OPEN"
+  },
+  {
+    "key": "demo:AX003",
+    "rule": "java:S1166",
+    "severity": "MAJOR",
+    "component": "java-spring-demo:src/main/java/com/demo/OrderService.java",
+    "line": 47,
+    "message": "Either log or rethrow this exception.",
+    "type": "BUG",
+    "status": "OPEN"
+  }
+]
