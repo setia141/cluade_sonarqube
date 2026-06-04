@@ -88,10 +88,9 @@ def get_rule_details(host: str, token: str, rule_key: str) -> Dict[str, Any]:
     Get details about a specific rule
     """
     url = f"{host}/api/rules/show"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     
     params = {"key": rule_key}
     
@@ -115,10 +114,9 @@ def get_source_code(
     Get source code from SonarQube
     """
     url = f"{host}/api/sources/show"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     
     params = {"key": component_key}
     if from_line:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Analyze SonarQube issues and suggest fixes
+Analyze SonarQube issues and suggest fixes — supports Java, Python, .NET, Node.js.
 Usage: python3 analyze_issue.py --issues issues.json --output analysis.json
 """
 
@@ -11,10 +11,13 @@ import sys
 from typing import Dict, List, Any, Optional
 
 
-class JavaIssueAnalyzer:
+class MultiLanguageIssueAnalyzer:
+    """
+    Analyze SonarQube issues across Java, Python, .NET, and Node.js.
+    Rule keys are prefixed by language: java:, python:, csharpsquid:, javascript:, typescript:
+    """
     """Analyze Java SonarQube issues and suggest fixes"""
     
-    # Common issue patterns and their fixes
     ISSUE_FIXES = {
         "java:S1104": {
             "title": "Remove unused private field",
@@ -300,33 +303,212 @@ try {
             "category": "Security",
             "severity": "CRITICAL",
             "fixStrategy": "Use strong algorithm (AES, SHA-256)",
-            "autoFixPossible": False,  # Context-dependent
+            "autoFixPossible": False,
             "fixTemplate": """
-// BEFORE - Weak:
-MessageDigest md = MessageDigest.getInstance("MD5");
-Cipher cipher = Cipher.getInstance("DES");
+// BEFORE: MessageDigest.getInstance("MD5") or Cipher.getInstance("DES")
+// AFTER:  MessageDigest.getInstance("SHA-256") / Cipher.getInstance("AES/GCM/NoPadding")
+            """,
+        },
 
-// AFTER - Strong:
-// For hashing passwords:
-BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
-String hashedPassword = encoder.encode(password);
+        # ── Python rules ──────────────────────────────────────────────────────
+        "python:S1172": {
+            "title": "Remove unused function parameter",
+            "category": "Code Quality",
+            "severity": "MAJOR",
+            "fixStrategy": "Remove or use the parameter; prefix with _ if intentionally unused",
+            "autoFixPossible": True,
+            "fixTemplate": """
+# BEFORE:
+def process(data, unused_param):
+    return data.strip()
 
-// For general hashing:
-MessageDigest md = MessageDigest.getInstance("SHA-256");
+# AFTER:
+def process(data):
+    return data.strip()
 
-// For encryption:
-Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-SecretKey key = new SecretKeySpec(keyBytes, 0, keyBytes.length, "AES");
-GCMParameterSpec spec = new GCMParameterSpec(128, ivBytes);
-cipher.init(Cipher.ENCRYPT_MODE, key, spec);
+# OR — mark as intentionally unused:
+def process(data, _unused_param):
+    return data.strip()
+            """,
+        },
+        "python:S5754": {
+            "title": "Bare except clause catches all exceptions",
+            "category": "Reliability",
+            "severity": "MAJOR",
+            "fixStrategy": "Catch specific exceptions",
+            "autoFixPossible": True,
+            "fixTemplate": """
+# BEFORE:
+try:
+    risky()
+except:
+    pass
 
-// Steps:
-// 1. Identify the weak algorithm
-// 2. Choose strong replacement (SHA-256, AES)
-// 3. For passwords, use bcrypt or Argon2
-// 4. Update key generation to proper length
-// 5. Test encryption/decryption
-// 6. Review security best practices
+# AFTER:
+try:
+    risky()
+except (ValueError, IOError) as e:
+    logger.error("Operation failed", exc_info=e)
+            """,
+        },
+        "python:S1481": {
+            "title": "Remove unused local variable",
+            "category": "Code Quality",
+            "severity": "MINOR",
+            "fixStrategy": "Remove the variable or use _ for intentionally unused",
+            "autoFixPossible": True,
+            "fixTemplate": """
+# BEFORE:
+def process():
+    unused = compute()
+    return result
+
+# AFTER:
+def process():
+    return result
+            """,
+        },
+        "python:S2077": {
+            "title": "SQL injection vulnerability",
+            "category": "Security",
+            "severity": "BLOCKER",
+            "fixStrategy": "Use parameterised queries",
+            "autoFixPossible": True,
+            "fixTemplate": """
+# BEFORE:
+cursor.execute("SELECT * FROM users WHERE id = " + user_id)
+
+# AFTER:
+cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+            """,
+        },
+
+        # ── .NET / C# rules ───────────────────────────────────────────────────
+        "csharpsquid:S2583": {
+            "title": "Condition always true or false",
+            "category": "Code Quality",
+            "severity": "MAJOR",
+            "fixStrategy": "Remove the dead branch or fix the condition logic",
+            "autoFixPossible": False,
+            "fixTemplate": """
+// BEFORE:
+bool flag = true;
+if (flag == false) { ... }  // dead code
+
+// AFTER: remove the dead branch entirely
+            """,
+        },
+        "csharpsquid:S3966": {
+            "title": "Object disposed and used after disposal",
+            "category": "Reliability",
+            "severity": "BLOCKER",
+            "fixStrategy": "Use using statement or restructure disposal",
+            "autoFixPossible": True,
+            "fixTemplate": """
+// BEFORE:
+var client = new HttpClient();
+client.Dispose();
+var result = await client.GetAsync(url);  // ObjectDisposedException
+
+// AFTER:
+using var client = new HttpClient();
+var result = await client.GetAsync(url);
+            """,
+        },
+        "csharpsquid:S2068": {
+            "title": "Hardcoded credentials",
+            "category": "Security",
+            "severity": "BLOCKER",
+            "fixStrategy": "Use IConfiguration, environment variables, or Azure Key Vault",
+            "autoFixPossible": False,
+            "fixTemplate": """
+// BEFORE:
+string apiKey = "sk_live_abc123";
+
+// AFTER:
+string apiKey = _configuration["ApiKey"];
+// or
+string apiKey = Environment.GetEnvironmentVariable("API_KEY");
+            """,
+        },
+        "csharpsquid:S1075": {
+            "title": "URIs should not be hardcoded",
+            "category": "Maintainability",
+            "severity": "MINOR",
+            "fixStrategy": "Read URI from configuration",
+            "autoFixPossible": False,
+            "fixTemplate": """
+// BEFORE:
+var url = "https://api.payment.com/charge";
+
+// AFTER:
+var url = _configuration["Services:Payment:Url"];
+            """,
+        },
+
+        # ── JavaScript / TypeScript rules ─────────────────────────────────────
+        "javascript:S3827": {
+            "title": "Variable used before declaration (var hoisting)",
+            "category": "Reliability",
+            "severity": "CRITICAL",
+            "fixStrategy": "Use const/let and declare before use",
+            "autoFixPossible": True,
+            "fixTemplate": """
+// BEFORE:
+console.log(x);  // undefined due to hoisting
+var x = 5;
+
+// AFTER:
+const x = 5;
+console.log(x);
+            """,
+        },
+        "javascript:S1068": {
+            "title": "Unused private field",
+            "category": "Code Quality",
+            "severity": "MAJOR",
+            "fixStrategy": "Remove the unused field",
+            "autoFixPossible": True,
+            "fixTemplate": """
+// BEFORE:
+class Service {
+  #unusedField = 'value';
+}
+
+// AFTER:
+class Service {
+  // field removed
+}
+            """,
+        },
+        "javascript:S2814": {
+            "title": "Variable re-declared with var",
+            "category": "Code Quality",
+            "severity": "MAJOR",
+            "fixStrategy": "Use const/let, remove duplicate declaration",
+            "autoFixPossible": True,
+            "fixTemplate": """
+// BEFORE:
+var x = 1;
+var x = 2;  // re-declaration
+
+// AFTER:
+let x = 1;
+x = 2;
+            """,
+        },
+        "typescript:S4325": {
+            "title": "Type assertion should not widen type",
+            "category": "Reliability",
+            "severity": "MAJOR",
+            "fixStrategy": "Remove unnecessary type assertion or use proper typing",
+            "autoFixPossible": False,
+            "fixTemplate": """
+// BEFORE:
+const value = someValue as any;
+
+// AFTER:
+const value: ExpectedType = someValue;
             """,
         },
     }
@@ -366,39 +548,45 @@ cipher.init(Cipher.ENCRYPT_MODE, key, spec);
         return analysis
     
     def _estimate_effort(self, rule_key: str) -> str:
-        """Estimate effort to fix based on rule"""
         effort_map = {
-            "java:S1104": "5 min",
-            "java:S1481": "5 min",
-            "java:S100": "10 min",  # Requires testing
-            "java:S101": "15 min",  # Class rename affects multiple files
-            "java:S2095": "20 min",  # Requires testing
-            "java:S2259": "30 min",  # May require design changes
-            "java:S3649": "30 min",  # Security fix, needs thorough testing
-            "java:S2115": "45 min",  # Infrastructure setup needed
-            "java:S1143": "60 min",  # Complex refactoring
-            "java:S4790": "45 min",  # Crypto is complex
+            # Java
+            "java:S1104": "5 min",   "java:S1481": "5 min",
+            "java:S100":  "10 min",  "java:S101":  "15 min",
+            "java:S2095": "20 min",  "java:S1166": "15 min",
+            "java:S2259": "30 min",  "java:S3649": "30 min",
+            "java:S2115": "45 min",  "java:S1143": "60 min",
+            "java:S4790": "45 min",
+            # Python
+            "python:S1172": "5 min", "python:S5754": "10 min",
+            "python:S1481": "5 min", "python:S2077": "30 min",
+            # .NET
+            "csharpsquid:S2583": "20 min", "csharpsquid:S3966": "15 min",
+            "csharpsquid:S2068": "45 min", "csharpsquid:S1075": "10 min",
+            # JavaScript / TypeScript
+            "javascript:S3827": "10 min", "javascript:S1068": "5 min",
+            "javascript:S2814": "5 min",  "typescript:S4325": "20 min",
         }
         return effort_map.get(rule_key, "1 hour")
     
-    def categorize_issues(self, issues: List[Dict[str, Any]]) -> Dict[str, List[Dict]]:
-        """Categorize issues by complexity"""
-        categorized = {
+    def categorize_analyses(self, analyses: List[Dict[str, Any]]) -> Dict[str, List[Dict]]:
+        """
+        Categorize pre-analyzed issues by fix complexity.
+        Accepts the output of analyze_issue(), not raw SonarQube issues.
+        """
+        categorized: Dict[str, List[Dict]] = {
             "autoFixable": [],
             "guidedFix": [],
             "manualReview": [],
         }
-        
-        for issue in issues:
-            analysis = self.analyze_issue(issue)
-            
+
+        for analysis in analyses:
             if not analysis.get("fixAvailable"):
                 categorized["manualReview"].append(analysis)
             elif analysis.get("autoFixPossible"):
                 categorized["autoFixable"].append(analysis)
             else:
                 categorized["guidedFix"].append(analysis)
-        
+
         return categorized
 
 
@@ -426,18 +614,17 @@ def main():
         sys.exit(1)
     
     # Analyze
-    analyzer = JavaIssueAnalyzer()
+    analyzer = MultiLanguageIssueAnalyzer()
     print(f"Analyzing {len(issues)} issues...")
-    
+
     analyses = []
     for issue in issues:
         analysis = analyzer.analyze_issue(issue)
         analyses.append(analysis)
-    
-    # Categorize
-    categorized = analyzer.categorize_issues(analyses)
-    
-    # Write output
+
+    # Categorize — pass analyses (not raw issues) to avoid double-analysis
+    categorized = analyzer.categorize_analyses(analyses)
+
     output = {
         "totalIssues": len(issues),
         "analyses": analyses,
