@@ -30,21 +30,19 @@ All examples below use `python` — substitute `python3` if you are on Mac/Linux
 
 ### One-time setup
 
-The agent runs as a custom Claude Code command. The command file is at `.claude/commands/sonarqube-fix.md` in this repo. Install it once by copying it to your global Claude Code commands folder:
+Copy the entire `sonarqube-fix` folder to your Claude Code global commands directory:
 
 **Windows**
 ```cmd
-mkdir %USERPROFILE%\.claude\commands
-copy .claude\commands\sonarqube-fix.md %USERPROFILE%\.claude\commands\sonarqube-fix.md
+xcopy /E /I .claude\commands\sonarqube-fix %USERPROFILE%\.claude\commands\sonarqube-fix
 ```
 
 **Mac/Linux**
 ```bash
-mkdir -p ~/.claude/commands
-cp .claude/commands/sonarqube-fix.md ~/.claude/commands/sonarqube-fix.md
+cp -r .claude/commands/sonarqube-fix ~/.claude/commands/sonarqube-fix
 ```
 
-> **After copying**, open `~/.claude/commands/sonarqube-fix.md` and update the two paths at the top to match where you cloned this repo on your machine.
+That's it. No path configuration needed — scripts are bundled inside the folder.
 
 ### Running the agent
 
@@ -208,20 +206,26 @@ HIGH confidence → ready PR. MEDIUM → draft PR. LOW → fix reverted.
 | LOW | Unit test regression detected | Revert fix |
 | SKIP | Compile failed | Do not touch file |
 
-## Scripts
+## Structure
 
-| Script | Purpose |
-|---|---|
-| `scripts/detect_language.py` | Language, framework, coverage tool detection |
-| `scripts/fetch_issues.py` | Fetch issues from SonarQube API |
-| `scripts/analyze_issue.py` | Enrich issues with rule details from SonarQube Rules API |
-| `scripts/validation/run_validation.py` | Orchestrator — phases: check-tests, baseline, post-fix |
-| `scripts/validation/coverage_check.py` | Line-level coverage via JaCoCo / pytest-cov / Coverlet / Jest |
-| `scripts/validation/java_wiremock.py` | WireMock integration test scaffold (Java) |
-| `scripts/validation/dotnet_wiremock.py` | WireMock.Net integration test scaffold (.NET) |
-| `scripts/validation/python_validator.py` | pytest-httpserver integration test scaffold (Python) |
-| `scripts/validation/node_validator.py` | nock integration test scaffold (Node.js) |
-| `scripts/create_pr.py` | Branch, commit, PR via `gh` CLI |
+```
+.claude/commands/sonarqube-fix/
+  sonarqube-fix.md          ← command definition — invoked as /sonarqube-fix
+  scripts/
+    detect_language.py      ← language/framework/coverage tool detection
+    fetch_issues.py         ← fetch issues from SonarQube API
+    analyze_issue.py        ← enrich issues with rule details
+    create_pr.py            ← branch, commit, PR via gh CLI
+    validation/
+      run_validation.py     ← orchestrator: check-tests / baseline / post-fix
+      coverage_check.py     ← JaCoCo / pytest-cov / Coverlet / Jest
+      java_wiremock.py      ← WireMock test scaffold (Java)
+      dotnet_wiremock.py    ← WireMock.Net test scaffold (.NET)
+      python_validator.py   ← pytest-httpserver test scaffold (Python)
+      node_validator.py     ← nock test scaffold (Node.js)
+```
+
+Scripts are only ever run by Claude — never manually.
 
 ## References
 

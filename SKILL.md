@@ -701,21 +701,24 @@ GIT_BRANCH                 # current branch name
 
 ## Scripts
 
+All scripts live at `~/.claude/commands/sonarqube-fix/scripts/` (installed alongside the command).
+Claude runs them via the Bash tool — they are never run manually.
+
 | Script | Purpose |
 |---|---|
-| `scripts/detect_language.py` | Language, framework, HTTP client detection |
-| `scripts/fetch_issues.py` | Query SonarQube API for open issues |
+| `scripts/detect_language.py` | Language, framework, coverage tool detection |
+| `scripts/fetch_issues.py` | Fetch issues from SonarQube API |
 | `scripts/analyze_issue.py` | Enrich issues with rule details from SonarQube Rules API |
-| `scripts/validation/run_validation.py` | Validation orchestrator — phases: check-tests, baseline, post-fix |
+| `scripts/validation/run_validation.py` | Orchestrator — phases: check-tests, baseline, post-fix |
 | `scripts/validation/coverage_check.py` | Line-level coverage via JaCoCo / pytest-cov / Coverlet / Jest |
-| `scripts/validation/java_wiremock.py` | Java WireMock integration test scaffold generator |
-| `scripts/validation/dotnet_wiremock.py` | .NET WireMock.Net integration test scaffold generator |
-| `scripts/validation/python_validator.py` | Python pytest-httpserver integration test scaffold generator |
-| `scripts/validation/node_validator.py` | Node nock integration test scaffold generator |
-| `scripts/create_pr.py` | Branch creation, commit, PR creation via gh CLI |
+| `scripts/validation/java_wiremock.py` | WireMock test scaffold (Java) |
+| `scripts/validation/dotnet_wiremock.py` | WireMock.Net test scaffold (.NET) |
+| `scripts/validation/python_validator.py` | pytest-httpserver test scaffold (Python) |
+| `scripts/validation/node_validator.py` | nock test scaffold (Node.js) |
+| `scripts/create_pr.py` | Branch, commit, PR via gh CLI |
 
-**Claude Code applies fixes directly** using Read/Edit/Write tools — there is no `generate_fix.py` script.
-**Claude Code fills in test scaffolds** — after generators produce the skeleton, Claude reads the source file and completes the FILL-IN sections.
+**Claude applies fixes directly** using Read/Edit/Write tools.
+**Claude fills in test scaffolds** — after generators produce the skeleton, Claude reads the source file and completes the FILL-IN sections.
 
 ---
 
