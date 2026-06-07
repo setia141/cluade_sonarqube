@@ -65,19 +65,28 @@ Token is optional for internal SonarQube instances with network authentication.
 ### Step 3 — Enrich issues with rule details
 
 ```bash
-python scripts/analyze_issue.py \
+# Mac/Linux
+python3 scripts/analyze_issue.py \
   --issues issues.json \
   --output enriched.json \
   --host $SONARQUBE_HOST_URL \
   --token $SONARQUBE_TOKEN \
   --project $SONARQUBE_PROJECT_KEY
+
+# Windows
+python scripts/analyze_issue.py ^
+  --issues issues.json ^
+  --output enriched.json ^
+  --host %SONARQUBE_HOST_URL% ^
+  --token %SONARQUBE_TOKEN% ^
+  --project %SONARQUBE_PROJECT_KEY%
 ```
 
 Calls `/api/rules/show` for every rule and attaches the rule name, full HTML description, severity, and type to each issue. Claude reads this to understand what to fix and how.
 
-**SonarCloud users:** the `--project` flag is required — the script derives the organization from it automatically. Without it the rules API returns 400.
+**SonarCloud:** `--project` is required — the script derives the organization from it automatically. Without it the rules API returns 400.
 
-**Self-hosted SonarQube:** `--project` is optional, organization is not required.
+**Self-hosted SonarQube:** `--project` is optional.
 
 ### Step 4 — Pre-flight coverage check
 
