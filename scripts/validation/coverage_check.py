@@ -233,7 +233,7 @@ def _ensure_pytest_cov(repo: Path) -> None:
     if probe.returncode == 0:
         return   # already installed
 
-    print("  [Coverage] pytest-cov not found — installing (add pytest-cov to requirements-dev.txt to avoid this)")
+    print("  [Coverage] pytest-cov not found - installing (add pytest-cov to requirements-dev.txt to avoid this)")
     subprocess.run("pip install pytest-cov -q", shell=True)
 
 

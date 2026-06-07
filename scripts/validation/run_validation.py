@@ -147,7 +147,7 @@ def run_validation(
     }
 
     print(f"\n{'='*60}")
-    print(f"Validation — phase: {phase.upper()} | language: {language}")
+    print(f"Validation - phase: {phase.upper()} | language: {language}")
     print(f"Integration tests: {'ENABLED' if integration else 'DISABLED (pass --integration to enable)'}")
     print(f"{'='*60}")
 

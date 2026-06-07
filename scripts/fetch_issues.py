@@ -64,7 +64,7 @@ def fetch_issues(
         issues = data.get("issues", [])
         total = data.get("total", 0)
         
-        print(f"✓ Found {total} critical/blocker issues")
+        print(f"OK: Found {total} critical/blocker issues")
         
         return {
             "success": True,
@@ -75,7 +75,7 @@ def fetch_issues(
         }
         
     except requests.exceptions.RequestException as e:
-        print(f"✗ Error fetching issues: {e}", file=sys.stderr)
+        print(f"ERROR: Error fetching issues: {e}", file=sys.stderr)
         return {
             "success": False,
             "error": str(e),
@@ -238,7 +238,7 @@ def main():
     with open(args.output, "w") as f:
         json.dump(issues, f, indent=2)
     
-    print(f"✓ Saved {len(issues)} issues to {args.output}")
+    print(f"OK: Saved {len(issues)} issues to {args.output}")
     
     # Summary
     print("\n=== Summary ===")

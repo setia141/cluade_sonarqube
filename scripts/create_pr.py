@@ -49,7 +49,7 @@ def create_pr(
     label, is_draft = CONFIDENCE_LABELS.get(confidence, ("needs-review", True))
 
     if dry_run:
-        print("=== DRY RUN — PR would be created with ===")
+        print("=== DRY RUN - PR would be created with ===")
         print(f"Title: {pr_title}")
         print(f"Branch: {branch}")
         print(f"Draft: {is_draft}")
