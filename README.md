@@ -30,21 +30,21 @@ All examples below use `python` — substitute `python3` if you are on Mac/Linux
 
 ### One-time setup
 
-The agent runs as a custom Claude Code command. Install it once:
+The agent runs as a custom Claude Code command. The command file is at `.claude/commands/sonarqube-fix.md` in this repo. Install it once by copying it to your global Claude Code commands folder:
 
 **Windows**
 ```cmd
 mkdir %USERPROFILE%\.claude\commands
-copy C:\path\to\cluade_sonarqube\.claude\commands\sonarqube-fix.md %USERPROFILE%\.claude\commands\sonarqube-fix.md
+copy .claude\commands\sonarqube-fix.md %USERPROFILE%\.claude\commands\sonarqube-fix.md
 ```
 
 **Mac/Linux**
 ```bash
 mkdir -p ~/.claude/commands
-cp /path/to/cluade_sonarqube/.claude/commands/sonarqube-fix.md ~/.claude/commands/sonarqube-fix.md
+cp .claude/commands/sonarqube-fix.md ~/.claude/commands/sonarqube-fix.md
 ```
 
-If you cloned this repo to `C:\Users\deepa\Desktop\cluade_sonarqube`, the command file is already at `C:\Users\deepa\.claude\commands\sonarqube-fix.md` — no copy needed.
+> **After copying**, open `~/.claude/commands/sonarqube-fix.md` and update the two paths at the top to match where you cloned this repo on your machine.
 
 ### Running the agent
 
