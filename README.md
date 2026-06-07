@@ -26,11 +26,57 @@ Autonomous agent that fixes SonarQube issues (Blocker, Critical, Major) across J
 
 All examples below use `python` — substitute `python3` if you are on Mac/Linux.
 
-## How to Use
+## How to Run from Claude Code
 
-This is a Claude Code agent. Open your repo in Claude Code and invoke it — Claude drives the full pipeline below using its Read/Edit/Write/Bash tools.
+### One-time setup
 
-## Pipeline
+The agent runs as a custom Claude Code command. Install it once:
+
+**Windows**
+```cmd
+mkdir %USERPROFILE%\.claude\commands
+copy C:\path\to\cluade_sonarqube\.claude\commands\sonarqube-fix.md %USERPROFILE%\.claude\commands\sonarqube-fix.md
+```
+
+**Mac/Linux**
+```bash
+mkdir -p ~/.claude/commands
+cp /path/to/cluade_sonarqube/.claude/commands/sonarqube-fix.md ~/.claude/commands/sonarqube-fix.md
+```
+
+If you cloned this repo to `C:\Users\deepa\Desktop\cluade_sonarqube`, the command file is already at `C:\Users\deepa\.claude\commands\sonarqube-fix.md` — no copy needed.
+
+### Running the agent
+
+1. **Open your target project in Claude Code**
+   ```cmd
+   cd C:\path\to\your-project
+   claude
+   ```
+
+2. **Type the slash command**
+   ```
+   /sonarqube-fix
+   ```
+
+Claude will:
+- Detect the language automatically
+- Ask for your SonarQube credentials if `issues.json` doesn't exist yet
+- Run the full pipeline: coverage check → create missing tests → baseline → fix → validate → PR
+- Stop and explain if anything goes wrong (failed enrichment, LOW confidence, etc.)
+
+### If you already have issues.json
+
+Copy it into your project root before running the command:
+```cmd
+copy C:\path\to\cluade_sonarqube\issues.json .
+copy C:\path\to\cluade_sonarqube\enriched.json .
+```
+Claude will detect these files and skip the fetch and enrich steps.
+
+---
+
+## Pipeline (what Claude does internally)
 
 ### Step 1 — Detect language
 

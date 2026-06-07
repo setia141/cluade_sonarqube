@@ -51,22 +51,33 @@ These are non-negotiable gates. If any condition is met, **stop and surface the 
 Unit tests are **primary**. Integration tests (mock servers) are **optional** — only run them if the changed code makes outbound HTTP calls and you want that extra layer.
 
 ```
+Note: use "python" on Windows, "python3" on Mac/Linux.
+      use %VAR% on Windows cmd, $VAR on Mac/Linux.
+
 PHASE 1 — DETECT
-  python3 scripts/detect_language.py --repo . --output lang.json
+  python scripts/detect_language.py --repo . --output lang.json
 
 PHASE 2 — FETCH ISSUES
-  python3 scripts/fetch_issues.py --host $SONARQUBE_HOST_URL \
-    --token $SONARQUBE_TOKEN --project $SONARQUBE_PROJECT_KEY \
+  python scripts/fetch_issues.py \
+    --host <SONARQUBE_HOST_URL> \
+    --token <SONARQUBE_TOKEN> \
+    --project <SONARQUBE_PROJECT_KEY> \
     --severities BLOCKER,CRITICAL,MAJOR --output issues.json
 
-  python3 scripts/analyze_issue.py --issues issues.json --output enriched.json
-  # Calls /api/rules/show for every rule and attaches name, htmlDesc, severity, type
-  # to each issue. Claude reads enriched.json and decides what to fix and how.
+  python scripts/analyze_issue.py \
+    --issues issues.json \
+    --host <SONARQUBE_HOST_URL> \
+    --token <SONARQUBE_TOKEN> \
+    --project <SONARQUBE_PROJECT_KEY> \
+    --output enriched.json
+  # Calls /api/rules/show for every rule and attaches name, htmlDesc, severity, type.
+  # SonarCloud: --project is required (organization is derived from it automatically).
+  # Script exits with code 1 if any rule fetch fails — do not proceed if it fails.
 
 PHASE 3 — ENSURE UNIT TESTS EXIST  ← NEW: always do this before baseline
 
   Step 3a — Pre-flight coverage check
-    python3 scripts/validation/run_validation.py \
+    python scripts/validation/run_validation.py \
       --lang-config lang.json \
       --changed-files "[list of files that will be fixed]" \
       --repo . --phase check-tests --output test-status.json
@@ -120,7 +131,7 @@ PHASE 3 — ENSURE UNIT TESTS EXIST  ← NEW: always do this before baseline
 PHASE 4 — BASELINE CAPTURE
 
   Step 4a — Unit test baseline (always)
-    python3 scripts/validation/run_validation.py \
+    python scripts/validation/run_validation.py \
       --lang-config lang.json \
       --changed-files "[files to be fixed]" \
       --repo . --phase baseline --output baseline.json
@@ -144,7 +155,7 @@ PHASE 4 — BASELINE CAPTURE
          tests (which are expected to fail before the fix).
 
   Step 4b — Integration baseline (optional — only if code makes HTTP calls)
-    python3 scripts/validation/run_validation.py \
+    python scripts/validation/run_validation.py \
       --lang-config lang.json \
       --changed-files "[files to be fixed]" \
       --repo . --phase baseline --integration --output baseline-integration.json
@@ -166,7 +177,8 @@ PHASE 4 — BASELINE CAPTURE
     Record stub interaction counts as integration baseline.
 
 PHASE 5 — APPLY FIX
-  For each AUTO/GUIDED issue in enriched.json:
+  For each issue in enriched.json (Claude decides what is safely fixable
+  based on ruleDetails.htmlDesc and the message field):
     1. Read the source file
     2. Apply the minimal change at the indicated line to resolve the rule
     3. Use Edit — change only what the SonarQube rule requires
@@ -175,18 +187,18 @@ PHASE 5 — APPLY FIX
 PHASE 6 — VALIDATE
 
   Step 6a — Unit tests (primary gate)
-    python3 scripts/validation/run_validation.py \
+    python scripts/validation/run_validation.py \
       --lang-config lang.json \
       --changed-files "[fixed files]" \
       --repo . --phase post-fix --baseline baseline.json --output validation.json
 
     Expected:
-    ✓ Happy path tests:     must still pass (were passing at baseline)
-    ✓ Fix-scenario tests:   must NOW pass (were failing at baseline — proves fix works)
-    ✓ Caller tests:         must still pass (no regression in calling code)
+    PASS: Happy path tests  — must still pass (were passing at baseline)
+    PASS: Fix-scenario tests — must NOW pass (were failing at baseline — proves fix works)
+    PASS: Caller tests      — must still pass (no regression in calling code)
 
   Step 6b — Integration tests (optional, if Step 4b was run)
-    python3 scripts/validation/run_validation.py \
+    python scripts/validation/run_validation.py \
       --lang-config lang.json \
       --changed-files "[fixed files]" \
       --repo . --phase post-fix --baseline baseline-integration.json \
@@ -655,10 +667,10 @@ AFTER FIX:
   Record: same metrics
 
 COMPARE:
-  ✓ Happy path tests:  must pass both before and after
-  ✓ Stub call counts:  must be identical (fix should not add or drop downstream calls)
-  ✓ Stub paths:        must be identical (fix should not change which endpoints are called)
-  ✗ Error path tests:  expected to FAIL before fix, PASS after fix (proves fix works)
+  PASS: Happy path tests  — must pass both before and after
+  PASS: Stub call counts  — must be identical (fix should not add or drop downstream calls)
+  PASS: Stub paths        — must be identical (fix should not change which endpoints are called)
+  EXPECTED FAIL->PASS: Error path tests — must FAIL before fix, PASS after fix
 ```
 
 ---
