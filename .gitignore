@@ -8,7 +8,19 @@ dist/
 build/
 .env
 *.json.bak
+
+# Runtime-generated agent artifacts (not source code)
+lang.json
+issues.json
+enriched.json
+baseline.json
+baseline-integration.json
+validation.json
+validation-integration.json
+test-status.json
+fixes.json
 coverage.xml
 coverage/
 .coverage
+
 node_modules/
