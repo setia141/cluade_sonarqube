@@ -20,6 +20,12 @@ Autonomous agent that fixes SonarQube issues (Blocker, Critical, Major) across J
 | `gh` CLI (authenticated) | PR creation |
 | Java 17+ / dotnet 8 / Node 20 | Only for the language you are fixing |
 
+**Python command:**
+- **Windows** — use `python`
+- **Mac / Linux** — use `python3`
+
+All examples below use `python` — substitute `python3` if you are on Mac/Linux.
+
 ## How to Use
 
 This is a Claude Code agent. Open your repo in Claude Code and invoke it — Claude drives the full pipeline below using its Read/Edit/Write/Bash tools.
@@ -29,7 +35,7 @@ This is a Claude Code agent. Open your repo in Claude Code and invoke it — Cla
 ### Step 1 — Detect language
 
 ```bash
-python3 scripts/detect_language.py --repo . --output lang.json
+python scripts/detect_language.py --repo . --output lang.json
 ```
 
 Detects language, framework, build tool, HTTP client, test framework, and whether coverage tools (JaCoCo, pytest-cov, Coverlet, Jest) are already configured.
@@ -37,11 +43,20 @@ Detects language, framework, build tool, HTTP client, test framework, and whethe
 ### Step 2 — Fetch issues
 
 ```bash
+# Mac/Linux
 python3 scripts/fetch_issues.py \
   --host $SONARQUBE_HOST_URL \
   --token $SONARQUBE_TOKEN \
   --project $SONARQUBE_PROJECT_KEY \
   --severities BLOCKER,CRITICAL,MAJOR \
+  --output issues.json
+
+# Windows
+python scripts/fetch_issues.py ^
+  --host %SONARQUBE_HOST_URL% ^
+  --token %SONARQUBE_TOKEN% ^
+  --project %SONARQUBE_PROJECT_KEY% ^
+  --severities BLOCKER,CRITICAL,MAJOR ^
   --output issues.json
 ```
 
@@ -50,7 +65,7 @@ Token is optional for internal SonarQube instances with network authentication.
 ### Step 3 — Enrich issues with rule details
 
 ```bash
-python3 scripts/analyze_issue.py --issues issues.json --output enriched.json
+python scripts/analyze_issue.py --issues issues.json --output enriched.json
 ```
 
 Calls `/api/rules/show` for every rule referenced in the issues and attaches the rule name, description, severity, and type to each issue. Claude reads this enriched output and decides what to fix and how.
@@ -58,7 +73,7 @@ Calls `/api/rules/show` for every rule referenced in the issues and attaches the
 ### Step 4 — Pre-flight coverage check
 
 ```bash
-python3 scripts/validation/run_validation.py \
+python scripts/validation/run_validation.py \
   --lang-config lang.json \
   --changed-files "[list from enriched.json]" \
   --repo . \
@@ -72,7 +87,7 @@ Runs existing tests with coverage enabled (JaCoCo / pytest-cov / Coverlet / Jest
 
 ```bash
 # Unit tests only (always)
-python3 scripts/validation/run_validation.py \
+python scripts/validation/run_validation.py \
   --lang-config lang.json \
   --changed-files "[files to fix]" \
   --repo . \
@@ -80,7 +95,7 @@ python3 scripts/validation/run_validation.py \
   --output baseline.json
 
 # + Integration tests with mock servers (optional — only if code makes HTTP calls)
-python3 scripts/validation/run_validation.py \
+python scripts/validation/run_validation.py \
   --lang-config lang.json \
   --changed-files "[files to fix]" \
   --repo . \
@@ -98,7 +113,7 @@ Claude reads `enriched.json`, reads each source file, and applies the minimal ch
 ### Step 7 — Validate (after fix)
 
 ```bash
-python3 scripts/validation/run_validation.py \
+python scripts/validation/run_validation.py \
   --lang-config lang.json \
   --changed-files "[fixed files]" \
   --repo . \
@@ -112,7 +127,7 @@ Expected: happy-path tests still pass, fix-scenario tests now pass (they failed 
 ### Step 8 — Create PR
 
 ```bash
-python3 scripts/create_pr.py \
+python scripts/create_pr.py \
   --fixes fixes.json \
   --validation validation.json \
   --base main
@@ -153,6 +168,8 @@ HIGH confidence → ready PR. MEDIUM → draft PR. LOW → fix reverted.
 | `references/github-actions-setup.md` | Optional CI workflow YAML for all 4 languages |
 
 ## Troubleshooting
+
+**`python3` not found on Windows** — use `python` instead. If neither works, install Python from python.org (not the Microsoft Store version).
 
 **No issues found** — check that the SonarQube analysis has completed and the project key is correct.
 

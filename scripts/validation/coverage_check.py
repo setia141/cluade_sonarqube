@@ -13,6 +13,7 @@ Claude uses this to create targeted tests before the fix is applied.
 
 import json
 import subprocess
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, Any, List, Set
@@ -227,8 +228,8 @@ def _ensure_pytest_cov(repo: Path) -> None:
 
     # Check if importable in current environment
     probe = subprocess.run(
-        "python3 -c \"import pytest_cov\"",
-        shell=True, capture_output=True
+        [sys.executable, "-c", "import pytest_cov"],
+        capture_output=True
     )
     if probe.returncode == 0:
         return   # already installed
