@@ -32,6 +32,20 @@ This is an **agent**, not a passive skill. The distinction matters:
 
 ---
 
+## Hard Stop Conditions
+
+These are non-negotiable gates. If any condition is met, **stop and surface the problem** — do not proceed silently.
+
+| Condition | Required action |
+|---|---|
+| `ruleDetails` is `{}` in enriched.json | STOP. The rule description fetch failed (likely 400 from SonarQube API). Read the issue `message` field and search the SonarQube rule docs to understand the fix. Do not guess. Tell the user which rule could not be enriched and why before proceeding. |
+| Baseline confidence is `LOW` or `SKIP` | STOP. Do not apply any fix. Read the validation stdout/stderr, diagnose the root cause (wrong test path, missing dependency, compile error), fix it, and re-run baseline until it passes. Only then continue. |
+| Post-fix confidence is `LOW` | Do NOT open a ready PR. Open a **draft PR** with a clear note explaining what failed and why. |
+| Post-fix confidence is `SKIP` | Revert all changes to the file. Do not open a PR. |
+| A test you write triggers a new SonarQube rule | Simplify the test. Never use nested loops, deeply nested conditionals, or long methods in generated test code. Use parameterized tests or simple flat assertions instead. |
+
+---
+
 ## Pipeline
 
 Unit tests are **primary**. Integration tests (mock servers) are **optional** — only run them if the changed code makes outbound HTTP calls and you want that extra layer.
@@ -114,6 +128,20 @@ PHASE 4 — BASELINE CAPTURE
     This runs unit tests for both the changed files AND their callers.
     Records pass/fail counts. Some tests (the fix-scenario ones) will fail here
     — that is expected and is recorded as the baseline.
+
+    ** If baseline returns LOW or SKIP confidence — STOP and diagnose: **
+      1. Read baseline.json layers.unit_tests.stdout and stderr in full
+      2. Common causes and fixes:
+         - "no tests ran" / "collected 0 items" → wrong test path. Check where
+           test files actually live (tests/, test/, src/test/) and correct
+           the --changed-files paths or the test runner command.
+         - "ModuleNotFoundError" → missing dependency. Run pip/npm/mvn install.
+         - "cannot find symbol" / compile error → fix the build first.
+         - "FileNotFoundError" for test file → the expected test file doesn't
+           exist yet. Go back to Step 3 and create it.
+      3. Fix the root cause, re-run baseline. Do NOT proceed until baseline
+         passes or until the only failing tests are the intentional fix-scenario
+         tests (which are expected to fail before the fix).
 
   Step 4b — Integration baseline (optional — only if code makes HTTP calls)
     python3 scripts/validation/run_validation.py \
