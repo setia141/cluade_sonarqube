@@ -294,7 +294,7 @@ class SonarFix{changed_cls}ValidationTest {{
 {happy_stubs}
 
         // ── FILL-IN: call the method being fixed ────────────────────────────────
-        // Read {changed_cls}.java, find the public method that analysis.json targets.
+        // Read {changed_cls}.java, find the public method that enriched.json targets.
         // Example:
         //   var result = service.methodName(validInput());
         //   assertThat(result).isNotNull();

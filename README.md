@@ -60,7 +60,7 @@ Calls `/api/rules/show` for every rule referenced in the issues and attaches the
 ```bash
 python3 scripts/validation/run_validation.py \
   --lang-config lang.json \
-  --changed-files "[list from analysis.json]" \
+  --changed-files "[list from enriched.json]" \
   --repo . \
   --phase check-tests \
   --output test-status.json
@@ -93,7 +93,7 @@ Unit tests run for changed files **and** any classes that call them (impact anal
 
 ### Step 6 — Apply fix
 
-Claude reads `analysis.json`, reads each source file, and applies the minimal change using the Edit tool. No script — Claude is the fix engine.
+Claude reads `enriched.json`, reads each source file, and applies the minimal change using the Edit tool. No script — Claude is the fix engine.
 
 ### Step 7 — Validate (after fix)
 

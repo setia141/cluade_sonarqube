@@ -129,7 +129,8 @@ def get_source_code(
         response.raise_for_status()
         
         sources = response.json().get("sources", [])
-        return "\n".join(s["line"] for s in sources)
+        # API returns [[lineNum, "code"], ...] arrays
+        return "\n".join(s[1] for s in sources if len(s) >= 2)
         
     except requests.exceptions.RequestException as e:
         print(f"Warning: Could not fetch source code: {e}", file=sys.stderr)

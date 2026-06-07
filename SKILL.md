@@ -72,7 +72,7 @@ PHASE 3 — ENSURE UNIT TESTS EXIST  ← NEW: always do this before baseline
       - If has_tests=true but uncovered_lines is non-empty: ADD test cases
         to the existing test file specifically for those uncovered line numbers
       1. Read the source file
-      2. Identify the class/struct/module name and the methods that analysis.json
+      2. Identify the class/struct/module name and the methods that enriched.json
          says will be changed
       3. Write a unit test file at expected_test_path from test-status.json:
 
@@ -138,7 +138,7 @@ PHASE 4 — BASELINE CAPTURE
     Record stub interaction counts as integration baseline.
 
 PHASE 5 — APPLY FIX
-  For each AUTO/GUIDED issue in analysis.json:
+  For each AUTO/GUIDED issue in enriched.json:
     1. Read the source file
     2. Apply the minimal change at the indicated line to resolve the rule
     3. Use Edit — change only what the SonarQube rule requires

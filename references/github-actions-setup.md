@@ -97,7 +97,7 @@ jobs:
           echo "Issues found: $(jq length issues.json)"
 
       - name: Analyse issues
-        run: python3 scripts/analyze_issue.py --issues issues.json --output analysis.json
+        run: python3 scripts/analyze_issue.py --issues issues.json --output enriched.json
 
       - name: Capture validation baseline
         run: |
@@ -116,7 +116,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           # Claude Code runs non-interactively.
-          # It reads analysis.json, reads each source file, applies fixes
+          # Claude reads enriched.json, reads each source file, applies fixes
           # using its Edit tool, then writes fixes.json via its Write tool.
           claude --print \
             --allowedTools "Read,Edit,Write,Bash" \
@@ -234,10 +234,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          python3 scripts/analyze_issue.py --issues issues.json --output analysis.json
+          python3 scripts/analyze_issue.py --issues issues.json --output enriched.json
           python3 scripts/validation/run_validation.py \
             --lang-config lang.json --changed-files "[]" --phase baseline --output baseline.json
-          claude --print --allowedTools "Read,Edit,Write,Bash" "Read analysis.json and lang.json. For each AUTO/GUIDED issue: read the file (path is after the colon in issue.component), apply the minimal fix with Edit, then write fixes.json listing every applied fix with rule/file/line/severity/fixStrategy/confidence/issue_key/applied fields. Write [] if nothing fixable."
+          claude --print --allowedTools "Read,Edit,Write,Bash" "Read enriched.json and lang.json. For each issue: read the file (path is after the colon in issue.component), decide if it is safely fixable using the ruleDetails.htmlDesc and message fields, apply the minimal fix with Edit, then write fixes.json listing every applied fix with rule/file/line/severity/fixStrategy/confidence/issue_key/applied fields. Write [] if nothing fixable."
           python3 scripts/validation/run_validation.py \
             --lang-config lang.json \
             --changed-files "$(jq -r '[.[].file]' fixes.json | jq -c .)" \
@@ -320,10 +320,10 @@ jobs:
           python3 scripts/fetch_issues.py \
             --host $SONARQUBE_HOST_URL --token $SONARQUBE_TOKEN \
             --project $SONARQUBE_PROJECT_KEY --output issues.json
-          python3 scripts/analyze_issue.py --issues issues.json --output analysis.json
+          python3 scripts/analyze_issue.py --issues issues.json --output enriched.json
           python3 scripts/validation/run_validation.py \
             --lang-config lang.json --changed-files "[]" --phase baseline --output baseline.json
-          claude --print --allowedTools "Read,Edit,Write,Bash" "Read analysis.json and lang.json. For each AUTO/GUIDED issue: read the file (path is after the colon in issue.component), apply the minimal fix with Edit, then write fixes.json listing every applied fix with rule/file/line/severity/fixStrategy/confidence/issue_key/applied fields. Write [] if nothing fixable."
+          claude --print --allowedTools "Read,Edit,Write,Bash" "Read enriched.json and lang.json. For each issue: read the file (path is after the colon in issue.component), decide if it is safely fixable using the ruleDetails.htmlDesc and message fields, apply the minimal fix with Edit, then write fixes.json listing every applied fix with rule/file/line/severity/fixStrategy/confidence/issue_key/applied fields. Write [] if nothing fixable."
           python3 scripts/validation/run_validation.py \
             --lang-config lang.json \
             --changed-files "$(jq -r '[.[].file]' fixes.json | jq -c .)" \
@@ -406,10 +406,10 @@ jobs:
           python3 scripts/fetch_issues.py \
             --host $SONARQUBE_HOST_URL --token $SONARQUBE_TOKEN \
             --project $SONARQUBE_PROJECT_KEY --output issues.json
-          python3 scripts/analyze_issue.py --issues issues.json --output analysis.json
+          python3 scripts/analyze_issue.py --issues issues.json --output enriched.json
           python3 scripts/validation/run_validation.py \
             --lang-config lang.json --changed-files "[]" --phase baseline --output baseline.json
-          claude --print --allowedTools "Read,Edit,Write,Bash" "Read analysis.json and lang.json. For each AUTO/GUIDED issue: read the file (path is after the colon in issue.component), apply the minimal fix with Edit, then write fixes.json listing every applied fix with rule/file/line/severity/fixStrategy/confidence/issue_key/applied fields. Write [] if nothing fixable."
+          claude --print --allowedTools "Read,Edit,Write,Bash" "Read enriched.json and lang.json. For each issue: read the file (path is after the colon in issue.component), decide if it is safely fixable using the ruleDetails.htmlDesc and message fields, apply the minimal fix with Edit, then write fixes.json listing every applied fix with rule/file/line/severity/fixStrategy/confidence/issue_key/applied fields. Write [] if nothing fixable."
           python3 scripts/validation/run_validation.py \
             --lang-config lang.json \
             --changed-files "$(jq -r '[.[].file]' fixes.json | jq -c .)" \
