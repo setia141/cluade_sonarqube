@@ -267,7 +267,123 @@ Claude applies fixes directly using Read/Edit/Write tools. Claude writes unit te
 
 ---
 
-## References
+## CI / GitHub Actions
 
-- `references/sonarqube-api.md` — SonarQube API endpoints
-- `references/github-actions-setup.md` — CI workflow examples
+The agent runs autonomously in CI after every SonarQube scan. Add these secrets to your repo:
+
+| Secret | Description |
+|---|---|
+| `SONARQUBE_TOKEN` | SonarQube API token |
+| `SONARQUBE_HOST_URL` | e.g. `https://sonarcloud.io` or internal URL |
+| `SONARQUBE_PROJECT_KEY` | Project key from SonarQube dashboard |
+| `ANTHROPIC_API_KEY` | Claude API key |
+| `GITHUB_TOKEN` | Auto-provided — needs `contents:write` and `pull-requests:write` |
+
+The pattern is the same for all languages — scan first, then fix on main:
+
+```yaml
+name: SonarQube Fixer
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * *'   # daily at 3 AM UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sonarqube-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Language-specific build + test step here (mvn package / pip install / npm ci / dotnet build)
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        env:
+          SONAR_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONARQUBE_HOST_URL }}
+        with:
+          args: -Dsonar.projectKey=${{ secrets.SONARQUBE_PROJECT_KEY }}
+
+  sonarqube-fix:
+    runs-on: ubuntu-latest
+    needs: sonarqube-scan
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Language-specific setup step here (setup-java / setup-python / setup-node / setup-dotnet)
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install agent dependencies
+        run: pip install requests anthropic
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Detect language
+        run: python3 .claude/commands/sonarqube-fix/scripts/detect_language.py --repo . --output lang.json
+
+      - name: Fetch issues
+        env:
+          SONARQUBE_HOST_URL: ${{ secrets.SONARQUBE_HOST_URL }}
+          SONARQUBE_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+          SONARQUBE_PROJECT_KEY: ${{ secrets.SONARQUBE_PROJECT_KEY }}
+        run: |
+          python3 .claude/commands/sonarqube-fix/scripts/fetch_issues.py \
+            --host $SONARQUBE_HOST_URL \
+            --token $SONARQUBE_TOKEN \
+            --project $SONARQUBE_PROJECT_KEY \
+            --severities BLOCKER,CRITICAL,MAJOR \
+            --output issues.json
+
+      - name: Enrich issues
+        run: |
+          python3 .claude/commands/sonarqube-fix/scripts/analyze_issue.py \
+            --issues issues.json \
+            --host $SONARQUBE_HOST_URL \
+            --token $SONARQUBE_TOKEN \
+            --project $SONARQUBE_PROJECT_KEY \
+            --output enriched.json
+
+      - name: Baseline
+        run: |
+          python3 .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
+            --lang-config lang.json \
+            --changed-files "[]" \
+            --repo . --phase baseline --output baseline.json
+
+      - name: Apply fixes (Claude Code — headless)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude --print --allowedTools "Read,Edit,Write,Bash" \
+            "Read enriched.json and lang.json. For each issue: file path is the part after the colon in issue.component. Read the file, apply the minimal fix for the SonarQube rule at the given line, use Edit to write it back. Write fixes.json: [{rule, file, line, severity, fixStrategy, applied}]. Write [] if nothing fixable."
+
+      - name: Validate
+        run: |
+          python3 .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
+            --lang-config lang.json \
+            --changed-files "$(jq -c '[.[].file]' fixes.json)" \
+            --repo . --phase post-fix --baseline baseline.json --output validation.json
+
+      - name: Create PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 .claude/commands/sonarqube-fix/scripts/create_pr.py \
+            --fixes fixes.json --validation validation.json --base main
+```

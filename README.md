@@ -201,14 +201,6 @@ HIGH confidence → ready PR. MEDIUM → draft PR. LOW → fix reverted.
 
 Scripts are only ever run by Claude — never manually.
 
-## References
-
-| File | Content |
-|---|---|
-| `references/sonarqube-api.md` | SonarQube REST API reference |
-| `references/validation-approach.md` | Validation architecture, mock server design |
-| `references/github-actions-setup.md` | Optional CI workflow YAML for all 4 languages |
-
 ## Troubleshooting
 
 **`python3` not found on Windows** — use `python` instead. If neither works, install Python from python.org (not the Microsoft Store version).
