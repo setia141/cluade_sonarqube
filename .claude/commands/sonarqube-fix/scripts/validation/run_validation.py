@@ -1,26 +1,24 @@
 #!/usr/bin/env python3
 """
-Validation orchestrator — unit tests first, integration tests optional.
+Validation orchestrator — compile, then unit tests.
 
 Phases:
   check-tests  Pre-flight: report which changed files have unit tests + who calls them
-  baseline     Run tests before fix (unit tests primary, integration optional)
+  baseline     Run tests before fix
   post-fix     Run tests after fix, compare against baseline
 
 Usage:
-  # Step 1 — pre-flight (always run first)
+  # Pre-flight (always run first)
   python3 run_validation.py --lang-config lang.json --changed-files files.json \
       --repo . --phase check-tests --output test-status.json
 
-  # Step 2 — baseline (unit tests only)
+  # Baseline
   python3 run_validation.py --lang-config lang.json --changed-files files.json \
       --repo . --phase baseline --output baseline.json
 
-  # Step 2 — baseline (unit + integration)
-  python3 run_validation.py ... --phase baseline --integration --output baseline.json
-
-  # Step 3 — post-fix
-  python3 run_validation.py ... --phase post-fix --baseline baseline.json --output validation.json
+  # Post-fix
+  python3 run_validation.py --lang-config lang.json --changed-files files.json \
+      --repo . --phase post-fix --baseline baseline.json --output validation.json
 """
 
 import argparse
@@ -65,7 +63,6 @@ def check_tests(
     language = lang_config.get("language", "unknown")
     repo = Path(repo_path)
 
-    # Run coverage tool to get line-level data
     print("\n[Pre-flight] Running coverage analysis...")
     coverage = check_coverage(lang_config, changed_files, repo_path)
 
@@ -88,18 +85,15 @@ def check_tests(
         cov_data = coverage.get("files", {}).get(src_file, {})
 
         files_status[src_file] = {
-            # Test file existence
             "has_tests": existing is not None,
             "test_file": str(existing.relative_to(repo)) if existing else None,
             "expected_test_path": str(
                 _expected_test_path(repo, src_file, language).relative_to(repo)
             ),
-            # Line coverage from JaCoCo / pytest-cov / Coverlet / Jest
             "coverage_pct": cov_data.get("covered_pct", 0.0),
             "uncovered_lines": cov_data.get("uncovered_lines", []),
             "covered_lines": cov_data.get("covered_lines", []),
             "needs_tests": cov_data.get("needs_tests", existing is None),
-            # Impact: who else calls this class
             "callers": caller_info,
         }
 
@@ -122,36 +116,32 @@ def run_validation(
     repo_path: str,
     phase: str,
     baseline_result: Optional[Dict] = None,
-    integration: bool = False,
 ) -> Dict[str, Any]:
     """
     Runs validation layers and returns a result dict.
 
-    Unit tests are PRIMARY — they always run.
-    Integration tests (mock servers) are SECONDARY — only when --integration is passed.
+    Layer 1: Build / compile
+    Layer 2: Unit tests (changed files + callers)
 
     phase="baseline"  → record state before fix
     phase="post-fix"  → compare against baseline, produce confidence score
     """
     language = lang_config.get("language", "unknown")
-    repo = Path(repo_path)
 
     result: Dict[str, Any] = {
-        "phase": phase,
-        "language": language,
-        "layers": {},
+        "phase":      phase,
+        "language":   language,
+        "layers":     {},
         "confidence": CONFIDENCE_SKIP,
-        "passed": False,
-        "summary": [],
-        "integration_enabled": integration,
+        "passed":     False,
+        "summary":    [],
     }
 
     print(f"\n{'='*60}")
-    print(f"Validation - phase: {phase.upper()} | language: {language}")
-    print(f"Integration tests: {'ENABLED' if integration else 'DISABLED (pass --integration to enable)'}")
+    print(f"Validation — phase: {phase.upper()} | language: {language}")
     print(f"{'='*60}")
 
-    # ── Layer 1: Build / compile ───────────────────────────────
+    # ── Layer 1: Build / compile ───────────────────────────────────────────────
     layer1 = _run_build(lang_config, repo_path)
     result["layers"]["compile"] = layer1
     if not layer1["passed"]:
@@ -160,11 +150,11 @@ def run_validation(
         return result
     result["summary"].append("PASS: Compile")
 
-    # ── Layer 2: Unit tests — changed files + callers ──────────
+    # ── Layer 2: Unit tests — changed files + callers ──────────────────────────
     caller_patterns: List[str] = []
     for src_file in changed_files:
-        for caller in _find_callers(repo, src_file, language):
-            t = _find_existing_test(repo, Path(caller).stem, language)
+        for caller in _find_callers(Path(repo_path), src_file, language):
+            t = _find_existing_test(Path(repo_path), Path(caller).stem, language)
             if t:
                 caller_patterns.append(Path(caller).stem)
 
@@ -188,46 +178,6 @@ def run_validation(
         extra = f" + {len(caller_patterns)} caller class(es)" if caller_patterns else ""
         result["summary"].append(f"PASS: Unit tests{extra}")
 
-    # ── Layer 3: Integration tests with mock servers (OPTIONAL) ─
-    if integration:
-        layer3 = _run_integration_tests(lang_config, repo_path, changed_files, phase)
-        result["layers"]["integration"] = layer3
-
-        if layer3.get("skipped"):
-            result["summary"].append("SKIP: Integration tests — no outbound HTTP calls detected")
-        elif not layer3["passed"]:
-            if phase == "post-fix":
-                result["summary"].append("FAIL: Integration test regression after fix")
-                result["confidence"] = CONFIDENCE_LOW
-                return result
-            else:
-                result["summary"].append(
-                    "WARN: Integration tests failed at baseline (error paths may fail before fix — that is expected)"
-                )
-        else:
-            result["summary"].append("PASS: Integration tests with mock servers")
-
-        # ── Layer 4: Stub interaction comparison (post-fix only) ─
-        if phase == "post-fix" and baseline_result:
-            baseline_int = baseline_result.get("layers", {}).get("integration", {})
-            if baseline_int and not baseline_int.get("skipped"):
-                layer4 = _compare_stub_interactions(baseline_int, layer3)
-                result["layers"]["stub_comparison"] = layer4
-                if not layer4["passed"]:
-                    result["summary"].append(
-                        f"WARN: Stub call count changed — {layer4.get('detail')}"
-                    )
-                    # Mismatch lowers confidence but does not fail outright
-                else:
-                    result["summary"].append("PASS: Stub interaction counts match baseline")
-    else:
-        result["layers"]["integration"] = {
-            "passed": True,
-            "skipped": True,
-            "reason": "Integration tests not requested (pass --integration to enable)",
-        }
-
-    # ── Confidence score ───────────────────────────────────────
     result["passed"] = True
     result["confidence"] = _score_confidence(result["layers"], phase, baseline_result)
 
@@ -236,7 +186,7 @@ def run_validation(
     return result
 
 
-# ── Layer runners ──────────────────────────────────────────────
+# ── Layer runners ──────────────────────────────────────────────────────────────
 
 def _run_build(lang_config: Dict, repo_path: str) -> Dict[str, Any]:
     cmd = lang_config.get("build_command", "")
@@ -281,53 +231,9 @@ def _run_unit_tests(
     }
 
 
-def _run_integration_tests(
-    lang_config: Dict, repo_path: str, changed_files: List[str], phase: str
-) -> Dict[str, Any]:
-    language = lang_config.get("language")
-    print(f"\n[Layer 3] Integration tests ({language})")
-
-    if language == "java":
-        from scripts.validation.java_wiremock import run_java_integration
-        return run_java_integration(lang_config, repo_path, changed_files, phase)
-    elif language == "dotnet":
-        from scripts.validation.dotnet_wiremock import run_dotnet_integration
-        return run_dotnet_integration(lang_config, repo_path, changed_files, phase)
-    elif language == "python":
-        from scripts.validation.python_validator import run_python_integration
-        return run_python_integration(lang_config, repo_path, changed_files, phase)
-    elif language == "node":
-        from scripts.validation.node_validator import run_node_integration
-        return run_node_integration(lang_config, repo_path, changed_files, phase)
-    return {"passed": True, "skipped": True, "reason": f"No integration validator for {language}"}
-
-
-def _compare_stub_interactions(baseline: Dict, postfix: Dict) -> Dict[str, Any]:
-    b = baseline.get("stub_calls", {})
-    p = postfix.get("stub_calls", {})
-    mismatches = [
-        f"{svc}: baseline={b[svc]}, post-fix={p.get(svc, 0)}"
-        for svc in b if b[svc] != p.get(svc, 0)
-    ] + [
-        f"{svc}: new call added by fix"
-        for svc in p if svc not in b
-    ]
-    return {
-        "passed": len(mismatches) == 0,
-        "baseline_calls": b,
-        "postfix_calls": p,
-        "mismatches": mismatches,
-        "detail": "; ".join(mismatches) if mismatches else "All stub counts match",
-    }
-
-
-# ── Caller / impact detection ──────────────────────────────────
+# ── Caller / impact detection ──────────────────────────────────────────────────
 
 def _find_callers(repo: Path, src_file: str, language: str) -> List[str]:
-    """
-    Find source files (non-test) that import or reference the changed class/module.
-    Used to widen the test scope beyond just the directly changed file.
-    """
     stem = Path(src_file).stem
 
     if language == "java":
@@ -376,7 +282,7 @@ def _is_test_file(rel_path: str, language: str) -> bool:
     if language == "java":
         return p.endswith("test.java") or p.endswith("tests.java") or "/test/" in p
     if language == "dotnet":
-        return ("test" in p) and p.endswith(".cs")
+        return "test" in p and p.endswith(".cs")
     if language == "python":
         name = Path(rel_path).name
         return name.startswith("test_") or name.endswith("_test.py") or "/test/" in p or "/tests/" in p
@@ -421,7 +327,7 @@ def _expected_test_path(repo: Path, src_file: str, language: str) -> Path:
     return repo / f"{stem}.test"
 
 
-# ── Test command builders ──────────────────────────────────────
+# ── Test command builders ──────────────────────────────────────────────────────
 
 def _unit_test_command(
     lang_config: Dict,
@@ -432,7 +338,6 @@ def _unit_test_command(
     build    = lang_config.get("build_tool")
 
     patterns = _derive_test_patterns(changed_files, language)
-    # Add caller test patterns (deduplicated)
     for p in extra_patterns:
         if p not in patterns:
             patterns.append(p)
@@ -501,24 +406,14 @@ def _parse_test_counts(output: str, language: str):
 
 
 def _score_confidence(layers: Dict, phase: str, baseline: Optional[Dict]) -> str:
-    compile_ok = layers.get("compile", {}).get("passed", False)
-    unit_ok    = layers.get("unit_tests", {}).get("passed", False)
-    int_layer  = layers.get("integration", {})
-    int_ok     = int_layer.get("passed", True)   # True when skipped
-    stub_ok    = layers.get("stub_comparison", {}).get("passed", True)
-
-    if not compile_ok:
+    if not layers.get("compile", {}).get("passed", False):
         return CONFIDENCE_SKIP
-    if not unit_ok:
+    if not layers.get("unit_tests", {}).get("passed", False):
         return CONFIDENCE_LOW
-    if not stub_ok:
-        return CONFIDENCE_MEDIUM
-    if unit_ok and int_ok and stub_ok:
-        return CONFIDENCE_HIGH
-    return CONFIDENCE_MEDIUM
+    return CONFIDENCE_HIGH
 
 
-# ── CLI ────────────────────────────────────────────────────────
+# ── CLI ────────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="Run validation pipeline")
@@ -529,8 +424,6 @@ def main():
                         choices=["check-tests", "baseline", "post-fix"])
     parser.add_argument("--baseline",      default=None,
                         help="baseline.json — required for post-fix phase")
-    parser.add_argument("--integration",   action="store_true",
-                        help="Also run integration tests with mock servers (optional, default: off)")
     parser.add_argument("--output",        default=None, help="Write result JSON to this file")
     args = parser.parse_args()
 
@@ -540,7 +433,7 @@ def main():
                      else json.loads(Path(args.changed_files).read_text()))
 
     if args.phase == "check-tests":
-        result = check_tests(lang_config, changed_files, args.repo)
+        result    = check_tests(lang_config, changed_files, args.repo)
         exit_code = 0
     else:
         baseline_result = None
@@ -553,7 +446,6 @@ def main():
             repo_path=args.repo,
             phase=args.phase,
             baseline_result=baseline_result,
-            integration=args.integration,
         )
         exit_code = 0 if result["passed"] else 1
 

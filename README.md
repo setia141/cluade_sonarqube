@@ -4,12 +4,12 @@ Autonomous agent that fixes SonarQube issues (Blocker, Critical, Major) across J
 
 ## Supported Languages
 
-| Language | Build Tool | Test Framework | Coverage Tool | Mock Library (integration) |
-|---|---|---|---|---|
-| Java | Maven / Gradle | JUnit 5 | JaCoCo | WireMock |
-| .NET | dotnet CLI | xUnit / NUnit / MSTest | Coverlet | WireMock.Net |
-| Python | pip / poetry | pytest | pytest-cov | pytest-httpserver |
-| Node.js | npm / yarn | Jest / Mocha | Jest --coverage | nock |
+| Language | Build Tool | Test Framework | Coverage Tool |
+|---|---|---|---|
+| Java | Maven / Gradle | JUnit 5 | JaCoCo |
+| .NET | dotnet CLI | xUnit / NUnit / MSTest | Coverlet |
+| Python | pip / poetry | pytest | pytest-cov |
+| Node.js | npm / yarn | Jest / Mocha | Jest --coverage |
 
 ## Prerequisites
 
@@ -134,25 +134,15 @@ Runs existing tests with coverage enabled (JaCoCo / pytest-cov / Coverlet / Jest
 ### Step 5 — Baseline (before fix)
 
 ```bash
-# Unit tests only (always)
 python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
   --lang-config lang.json \
   --changed-files "[files to fix]" \
   --repo . \
   --phase baseline \
   --output baseline.json
-
-# + Integration tests with mock servers (optional — only if code makes HTTP calls)
-python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
-  --lang-config lang.json \
-  --changed-files "[files to fix]" \
-  --repo . \
-  --phase baseline \
-  --integration \
-  --output baseline-integration.json
 ```
 
-Unit tests run for changed files **and** any classes that call them (impact analysis). Integration tests generate WireMock/nock/pytest-httpserver scaffolds — **Claude fills in the actual function calls** in the generated test before running.
+Runs unit tests for the changed files **and** any classes that call them (impact analysis). Records pass/fail counts as the baseline — fix-scenario tests are expected to fail here.
 
 ### Step 6 — Apply fix
 
@@ -172,6 +162,8 @@ python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
 
 Expected: happy-path tests still pass, fix-scenario tests now pass (they failed at baseline), caller tests still pass.
 
+Step 9 (`verify_pr.py`) is the authoritative end-to-end check — it asks SonarQube directly whether the issues are resolved on the PR branch.
+
 ### Step 8 — Create PR
 
 ```bash
@@ -187,9 +179,8 @@ HIGH confidence → ready PR. MEDIUM → draft PR. LOW → fix reverted.
 
 | Score | Condition | Action |
 |---|---|---|
-| HIGH | All unit tests pass, fix-scenario test now passes, callers pass | Ready PR |
-| MEDIUM | Most pass, minor flag | Draft PR |
-| LOW | Unit test regression detected | Revert fix |
+| HIGH | Compile passes, all unit tests pass | Ready PR |
+| LOW | Unit test regression after fix | Revert fix |
 | SKIP | Compile failed | Do not touch file |
 
 ## Structure
@@ -202,13 +193,10 @@ HIGH confidence → ready PR. MEDIUM → draft PR. LOW → fix reverted.
     fetch_issues.py         ← fetch issues from SonarQube API
     analyze_issue.py        ← enrich issues with rule details
     create_pr.py            ← branch, commit, PR via gh CLI
+    verify_pr.py            ← poll SonarQube to confirm PR is clean
     validation/
       run_validation.py     ← orchestrator: check-tests / baseline / post-fix
       coverage_check.py     ← JaCoCo / pytest-cov / Coverlet / Jest
-      java_wiremock.py      ← WireMock test scaffold (Java)
-      dotnet_wiremock.py    ← WireMock.Net test scaffold (.NET)
-      python_validator.py   ← pytest-httpserver test scaffold (Python)
-      node_validator.py     ← nock test scaffold (Node.js)
 ```
 
 Scripts are only ever run by Claude — never manually.
