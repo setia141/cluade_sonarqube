@@ -28,27 +28,13 @@ All examples below use `python` — substitute `python3` if you are on Mac/Linux
 
 ## How to Run from Claude Code
 
-### One-time setup
+### Setup
 
-Copy the entire `sonarqube-fix` folder to your Claude Code global commands directory:
+No copying required. The scripts live inside this repo at `.claude/commands/sonarqube-fix/scripts/` and are referenced with project-relative paths.
 
-**Windows**
-```cmd
-xcopy /E /I .claude\commands\sonarqube-fix %USERPROFILE%\.claude\commands\sonarqube-fix
-```
-
-**Mac/Linux**
-```bash
-cp -r .claude/commands/sonarqube-fix ~/.claude/commands/sonarqube-fix
-```
-
-That's it. No path configuration needed — scripts are bundled inside the folder.
-
-### Running the agent
-
-1. **Open your target project in Claude Code**
+1. **Open this repo in Claude Code**
    ```cmd
-   cd C:\path\to\your-project
+   cd C:\path\to\cluade_sonarqube
    claude
    ```
 
@@ -79,7 +65,7 @@ Claude will detect these files and skip the fetch and enrich steps.
 ### Step 1 — Detect language
 
 ```bash
-python scripts/detect_language.py --repo . --output lang.json
+python .claude/commands/sonarqube-fix/scripts/detect_language.py --repo . --output lang.json
 ```
 
 Detects language, framework, build tool, HTTP client, test framework, and whether coverage tools (JaCoCo, pytest-cov, Coverlet, Jest) are already configured.
@@ -88,7 +74,7 @@ Detects language, framework, build tool, HTTP client, test framework, and whethe
 
 ```bash
 # Mac/Linux
-python3 scripts/fetch_issues.py \
+python3 .claude/commands/sonarqube-fix/scripts/fetch_issues.py \
   --host $SONARQUBE_HOST_URL \
   --token $SONARQUBE_TOKEN \
   --project $SONARQUBE_PROJECT_KEY \
@@ -96,7 +82,7 @@ python3 scripts/fetch_issues.py \
   --output issues.json
 
 # Windows
-python scripts/fetch_issues.py ^
+python .claude/commands/sonarqube-fix/scripts/fetch_issues.py ^
   --host %SONARQUBE_HOST_URL% ^
   --token %SONARQUBE_TOKEN% ^
   --project %SONARQUBE_PROJECT_KEY% ^
@@ -110,7 +96,7 @@ Token is optional for internal SonarQube instances with network authentication.
 
 ```bash
 # Mac/Linux
-python3 scripts/analyze_issue.py \
+python3 .claude/commands/sonarqube-fix/scripts/analyze_issue.py \
   --issues issues.json \
   --output enriched.json \
   --host $SONARQUBE_HOST_URL \
@@ -118,7 +104,7 @@ python3 scripts/analyze_issue.py \
   --project $SONARQUBE_PROJECT_KEY
 
 # Windows
-python scripts/analyze_issue.py ^
+python .claude/commands/sonarqube-fix/scripts/analyze_issue.py ^
   --issues issues.json ^
   --output enriched.json ^
   --host %SONARQUBE_HOST_URL% ^
@@ -135,7 +121,7 @@ Calls `/api/rules/show` for every rule and attaches the rule name, full HTML des
 ### Step 4 — Pre-flight coverage check
 
 ```bash
-python scripts/validation/run_validation.py \
+python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
   --lang-config lang.json \
   --changed-files "[list from enriched.json]" \
   --repo . \
@@ -149,7 +135,7 @@ Runs existing tests with coverage enabled (JaCoCo / pytest-cov / Coverlet / Jest
 
 ```bash
 # Unit tests only (always)
-python scripts/validation/run_validation.py \
+python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
   --lang-config lang.json \
   --changed-files "[files to fix]" \
   --repo . \
@@ -157,7 +143,7 @@ python scripts/validation/run_validation.py \
   --output baseline.json
 
 # + Integration tests with mock servers (optional — only if code makes HTTP calls)
-python scripts/validation/run_validation.py \
+python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
   --lang-config lang.json \
   --changed-files "[files to fix]" \
   --repo . \
@@ -175,7 +161,7 @@ Claude reads `enriched.json`, reads each source file, and applies the minimal ch
 ### Step 7 — Validate (after fix)
 
 ```bash
-python scripts/validation/run_validation.py \
+python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
   --lang-config lang.json \
   --changed-files "[fixed files]" \
   --repo . \
@@ -189,7 +175,7 @@ Expected: happy-path tests still pass, fix-scenario tests now pass (they failed 
 ### Step 8 — Create PR
 
 ```bash
-python scripts/create_pr.py \
+python .claude/commands/sonarqube-fix/scripts/create_pr.py \
   --fixes fixes.json \
   --validation validation.json \
   --base main
