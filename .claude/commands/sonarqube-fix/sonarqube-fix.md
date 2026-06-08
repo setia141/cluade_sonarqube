@@ -16,6 +16,10 @@ Do not proceed past any of these silently.
 | Post-fix confidence is LOW | Open a DRAFT PR with explanation. Never a ready PR. |
 | Post-fix confidence is SKIP | Revert all changes. No PR. |
 | Test code you write would trigger S3776 | Rewrite it — no nested loops, flat assertions only. |
+| PR verification: original issues still open | STOP — fix the remaining issues, amend the branch, re-run Step 9. |
+| PR verification: new issues introduced | STOP — fix the new issues, amend the branch, re-run Step 9. |
+| PR verification: quality gate FAILED | STOP — diagnose quality gate conditions, fix, re-run Step 9. |
+| PR verification: analysis timeout | WARN user — SonarQube analysis did not complete in time; they must re-run Step 9 manually once CI finishes. |
 
 ---
 
@@ -127,6 +131,48 @@ python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
 python .claude/commands/sonarqube-fix/scripts/create_pr.py \
   --fixes fixes.json --validation validation.json --base main
 ```
+
+The script stages **only** the fixed source files and their test files (derived from `fixes.json`).
+It never stages skill working files (`.claude/`, `issues.json`, `enriched.json`, `fixes.json`,
+`baseline.json`, `validation.json`, `lang.json`, `test-status.json`, `coverage.xml`).
+
+From the JSON printed to stdout, capture:
+- `branch` — the fix branch name (e.g. `sonarqube/fixes-20260608-132650`)
+- `prUrl` — the GitHub PR URL (e.g. `https://github.com/owner/repo/pull/42`)
+
+Extract the PR number from the last path segment of `prUrl` (e.g. `42`). You need both in Step 9.
+
+---
+
+## Step 9 — Verify PR in SonarQube
+
+After the PR is pushed, SonarQube analyses the branch. Wait for that to finish and confirm:
+- All original issues are resolved on the branch
+- No new issues were introduced by the fix
+- The quality gate passes
+
+```bash
+python .claude/commands/sonarqube-fix/scripts/verify_pr.py \
+  --host <HOST> --token <TOKEN> \
+  --project <PROJECT_KEY> \
+  --branch <BRANCH_FROM_STEP_8> \
+  --pr-number <PR_NUMBER_FROM_STEP_8> \
+  --issues issues.json \
+  --output pr-verification.json \
+  --timeout 300
+```
+
+`--pr-number` is required on SonarCloud — without it, the issue fetch uses `branch=` which SonarCloud ignores for PR analyses, causing new issues to be silently missed.
+
+Read `pr-verification.json` and act on the result:
+
+| Outcome | Action |
+|---|---|
+| `passed: true` | Done — report PR URL and verification summary to user. |
+| `still_open_issues` non-empty | **Hard Stop** — fix remaining issues, push to same branch, re-run Step 9. |
+| `new_issues` non-empty | **Hard Stop** — fix each new issue (treat as a mini Step 6 loop), push, re-run Step 9. |
+| Quality gate FAILED | **Hard Stop** — read gate conditions from `pr-verification.json`, fix violations, push, re-run Step 9. |
+| Exit code 2 (timeout) | Warn user: analysis did not complete within timeout. Ask them to re-run Step 9 once CI finishes. |
 
 ---
 
