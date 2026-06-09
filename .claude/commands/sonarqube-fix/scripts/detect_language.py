@@ -101,6 +101,7 @@ def _java_details(repo: Path, build_tool: str) -> Dict[str, Any]:
         "build_command": "mvn compile" if build_tool == "maven" else "gradle compileJava",
         "test_command": "mvn test" if build_tool == "maven" else "gradle test",
         "confidence": "high",
+        **_detect_integration_tests(repo, "java", build_tool),
     }
 
 
@@ -179,6 +180,7 @@ def _dotnet_details(repo: Path, csproj_files: List[Path]) -> Dict[str, Any]:
         "build_command": "dotnet build",
         "test_command": "dotnet test",
         "confidence": "high",
+        **_detect_integration_tests(repo, "dotnet"),
     }
 
 
@@ -250,6 +252,7 @@ def _python_details(repo: Path) -> Dict[str, Any]:
         "build_command": "pip install -r requirements.txt",
         "test_command": "pytest",
         "confidence": "high",
+        **_detect_integration_tests(repo, "python"),
     }
 
 
@@ -335,6 +338,7 @@ def _node_details(repo: Path, pkg: Dict) -> Dict[str, Any]:
         "build_command": "npm install",
         "test_command": "npm test",
         "confidence": "high",
+        **_detect_integration_tests(repo, "node"),
     }
 
 
@@ -352,6 +356,58 @@ def _jest_coverage_configured(repo: Path, pkg: Dict) -> bool:
             if "collectCoverage" in content or "coverageDirectory" in content:
                 return True
     return False
+
+
+def _detect_integration_tests(repo: Path, language: str, build_tool: str = "") -> Dict[str, Any]:
+    """Detect existing integration tests and produce a ready-to-run command."""
+    none = {"has_integration_tests": False, "integration_test_command": None, "integration_test_dir": None}
+
+    if language == "java":
+        it_files = list(repo.rglob("*IT.java")) + list(repo.rglob("*IntegrationTest.java"))
+        if not it_files:
+            return none
+        if build_tool == "maven":
+            cmd = "mvn test -Dtest='*IT,*IntegrationTest' --no-transfer-progress -DfailIfNoTests=false"
+        else:
+            cmd = "gradle test --tests '*IT' --tests '*IntegrationTest'"
+        return {"has_integration_tests": True, "integration_test_command": cmd, "integration_test_dir": "src/test/java"}
+
+    if language == "dotnet":
+        it_projects = [p for p in repo.rglob("*.csproj") if "integration" in p.name.lower()]
+        it_files    = list(repo.rglob("*IntegrationTest.cs")) + list(repo.rglob("*IntegrationTests.cs"))
+        if not it_projects and not it_files:
+            return none
+        if it_projects:
+            cmd = f'dotnet test "{it_projects[0].relative_to(repo)}"'
+        else:
+            cmd = 'dotnet test --filter "Category=Integration|FullyQualifiedName~IntegrationTest"'
+        return {"has_integration_tests": True, "integration_test_command": cmd, "integration_test_dir": None}
+
+    if language == "python":
+        integration_dir = repo / "tests" / "integration"
+        it_files = list(repo.rglob("test_*integration*.py")) + list(repo.rglob("*_integration_test.py"))
+        if not integration_dir.exists() and not it_files:
+            return none
+        if integration_dir.exists():
+            cmd = f"pytest tests/integration/ -v"
+            d   = "tests/integration"
+        else:
+            cmd = "pytest -m integration -v"
+            d   = None
+        return {"has_integration_tests": True, "integration_test_command": cmd, "integration_test_dir": d}
+
+    if language == "node":
+        integration_dirs = [repo / "tests" / "integration", repo / "__tests__" / "integration", repo / "test" / "integration"]
+        it_files = (list(repo.rglob("*.integration.test.js")) + list(repo.rglob("*.integration.test.ts")) +
+                    list(repo.rglob("*.integration.spec.js")) + list(repo.rglob("*.integration.spec.ts")))
+        found_dir = next((d for d in integration_dirs if d.exists()), None)
+        if not found_dir and not it_files:
+            return none
+        cmd = "npx jest --testPathPattern='integration' --no-coverage"
+        return {"has_integration_tests": True, "integration_test_command": cmd,
+                "integration_test_dir": str(found_dir.relative_to(repo)) if found_dir else None}
+
+    return none
 
 
 def main():

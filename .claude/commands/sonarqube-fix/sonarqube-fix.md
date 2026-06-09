@@ -29,7 +29,7 @@ Do not proceed past any of these silently.
 python .claude/commands/sonarqube-fix/scripts/detect_language.py --repo . --output lang.json
 ```
 
-Report the detected language and framework to the user.
+Report the detected language and framework to the user. Also report whether `has_integration_tests` is true and, if so, the `integration_test_command` — the user should know integration tests will be run in Steps 5 and 7.
 
 ---
 
@@ -83,14 +83,24 @@ For every file where `needs_tests: true`:
 
 ## Step 5 — Baseline
 
+If `has_integration_tests` is true in lang.json, add `--integration` to run integration tests as Layer 3:
+
 ```bash
+# Without integration tests (default)
 python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
   --lang-config lang.json \
   --changed-files '<files>' \
   --repo . --phase baseline --output baseline.json
+
+# With integration tests
+python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
+  --lang-config lang.json \
+  --changed-files '<files>' \
+  --repo . --phase baseline --integration --output baseline.json
 ```
 
 If confidence is LOW or SKIP → **Hard Stop 2**.
+If integration tests fail at baseline, record it — a pre-existing failure does not block the fix.
 
 ---
 
@@ -111,11 +121,20 @@ For each issue in enriched.json:
 
 ## Step 7 — Validate
 
+Use the same `--integration` flag as Step 5 (match whatever was used at baseline):
+
 ```bash
+# Without integration tests
 python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
   --lang-config lang.json \
   --changed-files '<fixed files>' \
   --repo . --phase post-fix --baseline baseline.json --output validation.json
+
+# With integration tests
+python .claude/commands/sonarqube-fix/scripts/validation/run_validation.py \
+  --lang-config lang.json \
+  --changed-files '<fixed files>' \
+  --repo . --phase post-fix --baseline baseline.json --integration --output validation.json
 ```
 
 - HIGH → Step 8

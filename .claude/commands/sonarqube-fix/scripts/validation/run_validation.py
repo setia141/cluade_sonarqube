@@ -116,12 +116,14 @@ def run_validation(
     repo_path: str,
     phase: str,
     baseline_result: Optional[Dict] = None,
+    run_integration: bool = False,
 ) -> Dict[str, Any]:
     """
     Runs validation layers and returns a result dict.
 
     Layer 1: Build / compile
     Layer 2: Unit tests (changed files + callers)
+    Layer 3: Integration tests (opt-in via run_integration=True)
 
     phase="baseline"  → record state before fix
     phase="post-fix"  → compare against baseline, produce confidence score
@@ -178,6 +180,28 @@ def run_validation(
         extra = f" + {len(caller_patterns)} caller class(es)" if caller_patterns else ""
         result["summary"].append(f"PASS: Unit tests{extra}")
 
+    # ── Layer 3: Integration tests (opt-in) ────────────────────────────────────
+    if run_integration:
+        layer3 = _run_integration_tests(lang_config, repo_path)
+        result["layers"]["integration_tests"] = layer3
+        if layer3.get("skipped"):
+            result["summary"].append("SKIP: No integration tests detected")
+        elif not layer3["passed"]:
+            if phase == "post-fix" and baseline_result:
+                baseline_int = baseline_result.get("layers", {}).get("integration_tests", {})
+                if not baseline_int.get("passed") and not baseline_int.get("skipped"):
+                    result["summary"].append(
+                        "WARN: Integration tests also failed at baseline — pre-existing failure, not caused by fix"
+                    )
+                else:
+                    result["summary"].append("FAIL: Integration tests regressed after fix")
+                    result["confidence"] = CONFIDENCE_LOW
+                    return result
+            else:
+                result["summary"].append("WARN: Integration tests failed at baseline")
+        else:
+            result["summary"].append(f"PASS: Integration tests ({layer3.get('tests_passed', '?')} passed)")
+
     result["passed"] = True
     result["confidence"] = _score_confidence(result["layers"], phase, baseline_result)
 
@@ -222,6 +246,33 @@ def _run_unit_tests(
     passed_count, failed_count = _parse_test_counts(proc.stdout + proc.stderr, language)
     return {
         "passed": proc.returncode == 0,
+        "command": cmd,
+        "elapsed_sec": elapsed,
+        "tests_passed": passed_count,
+        "tests_failed": failed_count,
+        "stdout": proc.stdout[-3000:] if proc.stdout else "",
+        "stderr": proc.stderr[-1000:] if proc.stderr else "",
+    }
+
+
+def _run_integration_tests(lang_config: Dict, repo_path: str) -> Dict[str, Any]:
+    if not lang_config.get("has_integration_tests"):
+        return {"passed": True, "skipped": True, "reason": "No integration tests detected"}
+
+    cmd = lang_config.get("integration_test_command", "")
+    if not cmd:
+        return {"passed": True, "skipped": True, "reason": "No integration test command configured"}
+
+    print(f"\n[Layer 3] Integration tests: {cmd}")
+    t0 = time.time()
+    proc = subprocess.run(cmd, shell=True, cwd=repo_path, capture_output=True, text=True)
+    elapsed = round(time.time() - t0, 1)
+
+    language = lang_config.get("language")
+    passed_count, failed_count = _parse_test_counts(proc.stdout + proc.stderr, language)
+    return {
+        "passed": proc.returncode == 0,
+        "skipped": False,
         "command": cmd,
         "elapsed_sec": elapsed,
         "tests_passed": passed_count,
@@ -424,6 +475,8 @@ def main():
                         choices=["check-tests", "baseline", "post-fix"])
     parser.add_argument("--baseline",      default=None,
                         help="baseline.json — required for post-fix phase")
+    parser.add_argument("--integration",   action="store_true",
+                        help="Also run integration tests (Layer 3) if detected")
     parser.add_argument("--output",        default=None, help="Write result JSON to this file")
     args = parser.parse_args()
 
@@ -446,6 +499,7 @@ def main():
             repo_path=args.repo,
             phase=args.phase,
             baseline_result=baseline_result,
+            run_integration=args.integration,
         )
         exit_code = 0 if result["passed"] else 1
 
